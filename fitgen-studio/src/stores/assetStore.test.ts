@@ -92,6 +92,7 @@ describe('assetStore', () => {
       useAssetStore.getState().addModel({
         id: 'new-m',
         name: 'New Model',
+        imageUrl: '',
         thumbnailUrl: '',
         gender: 'female',
         bodyType: 'slim',

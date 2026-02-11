@@ -76,6 +76,7 @@ describe('studioStore', () => {
     const mockModel = {
       id: 'm1',
       name: 'Model 1',
+      imageUrl: '/model.jpg',
       thumbnailUrl: '/model.jpg',
       gender: 'female' as const,
       bodyType: 'slim' as const,
