@@ -3,10 +3,10 @@ import { useAssetStore } from './assetStore';
 
 // Mock data matching what the store's initialize() would load
 const MOCK_MODELS = [
-  { id: 'm1', name: 'Chic Model A', thumbnailUrl: '', presetType: 'chic' as const, gender: 'female' as const, bodyType: 'slim' as const, createdAt: '2026-02-10T10:00:00Z' },
-  { id: 'm2', name: 'Sporty Model B', thumbnailUrl: '', presetType: 'sporty' as const, gender: 'female' as const, bodyType: 'athletic' as const, createdAt: '2026-02-09T14:30:00Z' },
-  { id: 'm3', name: 'Street Male', thumbnailUrl: '', presetType: 'street' as const, gender: 'male' as const, bodyType: 'athletic' as const, createdAt: '2026-02-08T09:15:00Z' },
-  { id: 'm4', name: 'Lovely Model C', thumbnailUrl: '', presetType: 'lovely' as const, gender: 'female' as const, bodyType: 'slim' as const, createdAt: '2026-02-07T16:45:00Z' },
+  { id: 'm1', name: 'Chic Model A', imageUrl: '', thumbnailUrl: '', presetType: 'chic' as const, gender: 'female' as const, bodyType: 'slim' as const, createdAt: '2026-02-10T10:00:00Z' },
+  { id: 'm2', name: 'Sporty Model B', imageUrl: '', thumbnailUrl: '', presetType: 'sporty' as const, gender: 'female' as const, bodyType: 'athletic' as const, createdAt: '2026-02-09T14:30:00Z' },
+  { id: 'm3', name: 'Street Male', imageUrl: '', thumbnailUrl: '', presetType: 'street' as const, gender: 'male' as const, bodyType: 'athletic' as const, createdAt: '2026-02-08T09:15:00Z' },
+  { id: 'm4', name: 'Lovely Model C', imageUrl: '', thumbnailUrl: '', presetType: 'lovely' as const, gender: 'female' as const, bodyType: 'slim' as const, createdAt: '2026-02-07T16:45:00Z' },
 ];
 
 const MOCK_GARMENTS = [
