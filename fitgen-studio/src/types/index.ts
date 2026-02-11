@@ -35,6 +35,7 @@ export interface GeneratedImage {
 export interface ModelAsset {
   id: string;
   name: string;
+  imageUrl: string;
   thumbnailUrl: string;
   presetType?: "lovely" | "chic" | "sporty" | "street";
   gender: "female" | "male";

@@ -31,7 +31,9 @@ import {
   ChevronRight,
   AlertTriangle,
   RefreshCw,
+  Save,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import type { GeneratedImage } from "@/types";
 
 // ---- Sub-components ----
@@ -189,6 +191,7 @@ interface ImageToolbarProps {
   onShare: () => void;
   onCompare: () => void;
   onRegenerate: () => void;
+  onSave: () => void;
 }
 
 function ImageToolbar({
@@ -199,9 +202,18 @@ function ImageToolbar({
   onShare,
   onCompare,
   onRegenerate,
+  onSave,
 }: ImageToolbarProps) {
   return (
     <div className="flex items-center gap-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onSave}>
+            <Save className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Save to My Models</TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onDownload}>
@@ -314,6 +326,28 @@ export function CenterPanel() {
     } else {
       await navigator.clipboard.writeText(image.url);
     }
+  }, []);
+
+  const handleSave = useCallback((image: GeneratedImage) => {
+    if (!image.url) return;
+    const { gender, bodyType, presetType } = useStudioStore.getState();
+    const { addModel, models } = useStudioStore.getState();
+    // Prevent duplicate saves
+    if (models.some((m) => m.id === image.id)) {
+      toast("Already saved to My Models", { icon: "ℹ️" });
+      return;
+    }
+    addModel({
+      id: image.id,
+      name: `Model ${models.length + 1}`,
+      imageUrl: image.url,
+      thumbnailUrl: image.thumbnailUrl || image.url,
+      presetType: presetType ?? undefined,
+      gender,
+      bodyType,
+      createdAt: image.createdAt,
+    });
+    toast.success("Saved to My Models!");
   }, []);
 
   const handleZoomIn = useCallback(() => {
@@ -512,6 +546,7 @@ export function CenterPanel() {
               onShare={() => handleShare(image)}
               onCompare={() => setViewMode("compare")}
               onRegenerate={() => {}}
+              onSave={() => handleSave(image)}
             />
           )}
         </div>
@@ -666,6 +701,17 @@ export function CenterPanel() {
                             isFav && "fill-red-500 text-red-500"
                           )}
                         />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-white hover:bg-white/20"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSave(image);
+                        }}
+                      >
+                        <Save className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
