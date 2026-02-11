@@ -109,32 +109,89 @@ export function RightPanel() {
 
   const canClickGenerate = (selectedGarmentId || presetType) && !isGenerating && !isExhausted;
 
+  const mapBodyType = (bt: string) => (bt === "plus" ? "plus-size" : bt);
+  const mapBackground = (bg: string): string => {
+    const bgMap: Record<string, string> = {
+      "white-studio": "studio-white",
+      "gray-studio": "studio-gray",
+      "urban": "outdoor-urban",
+      "cafe": "lifestyle-cafe",
+      "office": "lifestyle-office",
+      "nature": "outdoor-nature",
+    };
+    return bgMap[bg] ?? bg;
+  };
+  const mapPose = (p: string) => (p === "standing-34" ? "standing-three-quarter" : p);
+
   const executeGeneration = async () => {
     setIsGenerating(true);
     setGenerationError(null);
     setGenerationProgress(0);
     recordUsage();
+
+    const requestBody = {
+      gender,
+      bodyType: mapBodyType(bodyType),
+      ageRange,
+      style: presetType || "lovely",
+      pose: mapPose(posePreset),
+      background: mapBackground(backgroundPreset),
+      lighting: lightingPreset,
+    };
+
     try {
-      // Simulate generation with progress - will be connected to real API later
-      for (let i = 0; i <= 100; i += 10) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        setGenerationProgress(i);
-      }
-      setGeneratedImages(
-        Array.from({ length: 4 }, (_, i) => ({
+      setGenerationProgress(10);
+
+      // Generate 4 variations in parallel
+      const promises = Array.from({ length: 4 }, () =>
+        fetch("/api/generate/model", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-id": user?.id || "anonymous",
+            "x-user-tier": tier,
+          },
+          body: JSON.stringify(requestBody),
+        }).then(async (res) => {
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: "Generation failed" }));
+            throw new Error(err.error || `HTTP ${res.status}`);
+          }
+          return res.json();
+        })
+      );
+
+      setGenerationProgress(30);
+
+      const results = await Promise.allSettled(promises);
+      setGenerationProgress(90);
+
+      const images = results
+        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
+        .map((r) => ({
           id: crypto.randomUUID(),
-          url: "",
-          thumbnailUrl: "",
-          prompt: `Generated image ${i + 1}`,
+          url: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
+          thumbnailUrl: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
+          prompt: r.value.data.promptUsed || "",
           modelId: selectedModelId || "",
           garmentId: selectedGarmentId || undefined,
           createdAt: new Date().toISOString(),
           status: "completed" as const,
-        }))
-      );
-      toast.success("Lookbook generated successfully!");
-    } catch {
-      const errorMsg = "Generation failed. Please try again.";
+        }));
+
+      setGenerationProgress(100);
+
+      if (images.length === 0) {
+        const firstError = results.find(
+          (r): r is PromiseRejectedResult => r.status === "rejected"
+        );
+        throw new Error(firstError?.reason?.message || "All generations failed");
+      }
+
+      setGeneratedImages(images);
+      toast.success(`${images.length} image${images.length > 1 ? "s" : ""} generated!`);
+    } catch (err: any) {
+      const errorMsg = err?.message || "Generation failed. Please try again.";
       setGenerationError(errorMsg);
       toast.error(errorMsg);
     } finally {
