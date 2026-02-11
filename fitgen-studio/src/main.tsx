@@ -4,8 +4,12 @@ import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAuthStore } from "@/stores/authStore";
 import "./index.css";
 import App from "./App.tsx";
+
+// Initialize auth session on app start
+useAuthStore.getState().initialize();
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -17,17 +17,23 @@ import { Separator } from "@/components/ui/separator";
 export function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { login, isLoading } = useAuthStore();
+  const { login, loginWithGoogle, isLoading, error } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = (location.state as { from?: { pathname: string } })?.from
-    ?.pathname || "/";
+  const from =
+    (location.state as { from?: { pathname: string } })?.from?.pathname || "/";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await login(email, password);
-    navigate(from, { replace: true });
+    if (useAuthStore.getState().isAuthenticated) {
+      navigate(from, { replace: true });
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    await loginWithGoogle();
   };
 
   return (
@@ -43,6 +49,12 @@ export function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -77,7 +89,12 @@ export function LoginPage() {
             <Separator className="flex-1" />
           </div>
 
-          <Button variant="outline" className="w-full" disabled={isLoading}>
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={isLoading}
+            onClick={handleGoogleLogin}
+          >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
