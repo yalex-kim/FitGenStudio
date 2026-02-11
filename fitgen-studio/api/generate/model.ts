@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { GoogleGenAI } from '@google/genai';
 
 interface ModelRequestBody {
   gender: string;
@@ -61,71 +62,43 @@ function validateBody(body: unknown): { valid: true; data: ModelRequestBody } | 
   return { valid: true, data: body as ModelRequestBody };
 }
 
-// Inline Gemini call to avoid module resolution issues in Vercel serverless
-const GEMINI_MODEL = 'gemini-2.0-flash-exp';
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 1000;
-const REQUEST_TIMEOUT_MS = 60_000;
+const GEMINI_MODEL = 'gemini-3-pro-image-preview';
 
 async function callGemini(prompt: string) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
 
-  const url = `${GEMINI_BASE_URL}/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      responseModalities: ['TEXT', 'IMAGE'],
-      temperature: 1.0,
-      topP: 0.95,
+  const client = new GoogleGenAI({ apiKey });
+
+  const response = await client.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: prompt,
+    config: {
+      imageConfig: {
+        aspectRatio: '1:1' as const,
+        imageSize: '1K' as const,
+      },
     },
-  };
+  });
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1)));
-    }
+  const parts = response.candidates?.[0]?.content?.parts;
+  if (!parts) {
+    throw new Error('No response from Gemini');
+  }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
-
-      if (res.status === 429) continue;
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (res.status >= 500) continue;
-        throw { status: res.status, body: err };
-      }
-
-      const data = await res.json();
-      const imagePart = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-      if (!imagePart?.inlineData) continue;
-
+  for (const part of parts) {
+    if (part.inlineData && part.inlineData.data) {
       return {
-        imageBase64: imagePart.inlineData.data,
-        mimeType: imagePart.inlineData.mimeType,
+        imageBase64: part.inlineData.data,
+        mimeType: part.inlineData.mimeType || 'image/png',
         promptUsed: prompt,
         timestamp: new Date().toISOString(),
         modelVersion: GEMINI_MODEL,
       };
-    } catch (e: any) {
-      clearTimeout(timeout);
-      if (e?.status) throw e;
-      if (attempt === MAX_RETRIES - 1) throw e;
     }
   }
 
-  throw new Error('Max retries exceeded');
+  throw new Error('No image data received from Gemini');
 }
 
 // Simplified prompt builder for serverless context
