@@ -55,6 +55,22 @@ CREATE TABLE public.garments (
 CREATE INDEX idx_garments_user_id ON public.garments(user_id);
 
 -- ============================================
+-- Projects (group generations together)
+-- NOTE: Must be created BEFORE generations (referenced by FK)
+-- ============================================
+CREATE TABLE public.projects (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT 'Untitled Project',
+  description TEXT,
+  cover_image_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_projects_user_id ON public.projects(user_id);
+
+-- ============================================
 -- Generations (generated lookbook images)
 -- ============================================
 CREATE TABLE public.generations (
@@ -75,21 +91,6 @@ CREATE TABLE public.generations (
 CREATE INDEX idx_generations_user_id ON public.generations(user_id);
 CREATE INDEX idx_generations_project_id ON public.generations(project_id);
 CREATE INDEX idx_generations_created_at ON public.generations(created_at DESC);
-
--- ============================================
--- Projects (group generations together)
--- ============================================
-CREATE TABLE public.projects (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL DEFAULT 'Untitled Project',
-  description TEXT,
-  cover_image_url TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_projects_user_id ON public.projects(user_id);
 
 -- ============================================
 -- Usage Logs (track API usage per user)
@@ -222,3 +223,26 @@ CREATE TRIGGER models_updated_at
 CREATE TRIGGER projects_updated_at
   BEFORE UPDATE ON public.projects
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================
+-- Auto-create public.users row on signup
+-- This trigger fires when a new user registers
+-- via Supabase Auth (email/password or Google OAuth)
+-- ============================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.users (id, email, display_name, avatar_url)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
+    NEW.raw_user_meta_data->>'avatar_url'
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
