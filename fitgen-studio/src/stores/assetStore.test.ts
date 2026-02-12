@@ -1,7 +1,37 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useAssetStore } from './assetStore';
 
-// Mock data matching what the store's initialize() would load
+// Mock Supabase so store doesn't hit real API
+vi.mock('@/lib/supabase', () => {
+  const chainable = () => {
+    const obj: Record<string, any> = {};
+    const methods = ['from', 'select', 'insert', 'update', 'delete', 'eq', 'in', 'order', 'single'];
+    for (const m of methods) {
+      obj[m] = vi.fn().mockReturnValue(obj);
+    }
+    obj.then = vi.fn().mockImplementation((cb: any) => { cb?.({ data: null, error: null }); return obj; });
+    return obj;
+  };
+  return {
+    supabase: {
+      ...chainable(),
+      storage: {
+        from: vi.fn().mockReturnValue({
+          upload: vi.fn().mockResolvedValue({ error: null }),
+          getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: 'https://test.com/img.png' } }),
+        }),
+      },
+    },
+  };
+});
+
+// Mock authStore
+vi.mock('./authStore', () => ({
+  useAuthStore: {
+    getState: vi.fn().mockReturnValue({ user: null }),
+  },
+}));
+
 const MOCK_MODELS = [
   { id: 'm1', name: 'Chic Model A', imageUrl: '', thumbnailUrl: '', presetType: 'chic' as const, gender: 'female' as const, bodyType: 'slim' as const, createdAt: '2026-02-10T10:00:00Z' },
   { id: 'm2', name: 'Sporty Model B', imageUrl: '', thumbnailUrl: '', presetType: 'sporty' as const, gender: 'female' as const, bodyType: 'athletic' as const, createdAt: '2026-02-09T14:30:00Z' },

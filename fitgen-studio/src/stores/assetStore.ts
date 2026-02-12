@@ -1,5 +1,8 @@
 import { create } from "zustand";
+import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "./authStore";
 import type { ModelAsset, GarmentAsset, ReferenceAsset } from "@/types";
+import type { ModelRow, GarmentRow } from "@/types/database";
 
 export type AssetCategory = "models" | "garments" | "references";
 
@@ -31,117 +34,55 @@ export interface AssetState {
   initialize: () => void;
 }
 
-// Mock data for demonstration
-const MOCK_MODELS: ModelAsset[] = [
-  {
-    id: "m1",
-    name: "Chic Model A",
-    thumbnailUrl: "",
-    imageUrl: "",
-    presetType: "chic",
-    gender: "female",
-    bodyType: "slim",
-    createdAt: "2026-02-10T10:00:00Z",
-  },
-  {
-    id: "m2",
-    name: "Sporty Model B",
-    thumbnailUrl: "",
-    imageUrl: "",
-    presetType: "sporty",
-    gender: "female",
-    bodyType: "athletic",
-    createdAt: "2026-02-09T14:30:00Z",
-  },
-  {
-    id: "m3",
-    name: "Street Male",
-    thumbnailUrl: "",
-    imageUrl: "",
-    presetType: "street",
-    gender: "male",
-    bodyType: "athletic",
-    createdAt: "2026-02-08T09:15:00Z",
-  },
-  {
-    id: "m4",
-    name: "Lovely Model C",
-    thumbnailUrl: "",
-    imageUrl: "",
-    presetType: "lovely",
-    gender: "female",
-    bodyType: "slim",
-    createdAt: "2026-02-07T16:45:00Z",
-  },
-];
+// --- DB ↔ Frontend type mappers ---
 
-const MOCK_GARMENTS: GarmentAsset[] = [
-  {
-    id: "g1",
-    name: "White Blouse",
-    thumbnailUrl: "",
-    originalUrl: "",
-    category: "tops",
-    createdAt: "2026-02-10T11:00:00Z",
-  },
-  {
-    id: "g2",
-    name: "Denim Jacket",
-    thumbnailUrl: "",
-    originalUrl: "",
-    category: "outerwear",
-    createdAt: "2026-02-09T13:00:00Z",
-  },
-  {
-    id: "g3",
-    name: "Black Skirt",
-    thumbnailUrl: "",
-    originalUrl: "",
-    category: "bottoms",
-    createdAt: "2026-02-08T15:00:00Z",
-  },
-  {
-    id: "g4",
-    name: "Floral Dress",
-    thumbnailUrl: "",
-    originalUrl: "",
-    category: "dresses",
-    createdAt: "2026-02-07T10:00:00Z",
-  },
-  {
-    id: "g5",
-    name: "Striped T-Shirt",
-    thumbnailUrl: "",
-    originalUrl: "",
-    category: "tops",
-    createdAt: "2026-02-06T09:00:00Z",
-  },
-  {
-    id: "g6",
-    name: "Leather Bag",
-    thumbnailUrl: "",
-    originalUrl: "",
-    category: "accessories",
-    createdAt: "2026-02-05T14:00:00Z",
-  },
-];
+function mapBodyTypeFromDb(bt: string): "slim" | "athletic" | "plus" {
+  return bt === "plus-size" ? "plus" : (bt as "slim" | "athletic");
+}
 
-const MOCK_REFERENCES: ReferenceAsset[] = [
-  {
-    id: "r1",
-    name: "Editorial Lighting Ref",
-    thumbnailUrl: "",
-    originalUrl: "",
-    createdAt: "2026-02-10T12:00:00Z",
-  },
-  {
-    id: "r2",
-    name: "Street Style Mood",
-    thumbnailUrl: "",
-    originalUrl: "",
-    createdAt: "2026-02-09T08:00:00Z",
-  },
-];
+function modelRowToAsset(row: ModelRow): ModelAsset {
+  return {
+    id: row.id,
+    name: row.name,
+    imageUrl: row.image_url,
+    thumbnailUrl: row.thumbnail_url || row.image_url,
+    presetType: row.style_preset ?? undefined,
+    gender: row.gender,
+    bodyType: mapBodyTypeFromDb(row.body_type),
+    createdAt: row.created_at,
+  };
+}
+
+function garmentRowToAsset(row: GarmentRow): GarmentAsset {
+  return {
+    id: row.id,
+    name: row.name,
+    thumbnailUrl: row.thumbnail_url || row.image_url,
+    originalUrl: row.image_url,
+    category: row.category,
+    createdAt: row.created_at,
+  };
+}
+
+function getUserId(): string | null {
+  return useAuthStore.getState().user?.id ?? null;
+}
+
+// References are stored in localStorage (no DB table)
+const REFS_STORAGE_KEY = "fitgen-references";
+
+function loadLocalReferences(): ReferenceAsset[] {
+  try {
+    const raw = localStorage.getItem(REFS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalReferences(refs: ReferenceAsset[]) {
+  localStorage.setItem(REFS_STORAGE_KEY, JSON.stringify(refs));
+}
 
 export const useAssetStore = create<AssetState>()((set, get) => ({
   models: [],
@@ -184,70 +125,164 @@ export const useAssetStore = create<AssetState>()((set, get) => ({
   addGarment: (garment) =>
     set((state) => ({ garments: [garment, ...state.garments] })),
   addReference: (ref) =>
-    set((state) => ({ references: [ref, ...state.references] })),
-
-  removeAssets: (ids) =>
     set((state) => {
-      const idSet = new Set(ids);
-      return {
-        models: state.models.filter((m) => !idSet.has(m.id)),
-        garments: state.garments.filter((g) => !idSet.has(g.id)),
-        references: state.references.filter((r) => !idSet.has(r.id)),
-        selectedIds: new Set(),
-      };
+      const next = [ref, ...state.references];
+      saveLocalReferences(next);
+      return { references: next };
     }),
 
-  renameAsset: (id, name) =>
+  removeAssets: (ids) => {
+    const userId = getUserId();
+    const idSet = new Set(ids);
+
+    // Optimistic update
+    set((state) => ({
+      models: state.models.filter((m) => !idSet.has(m.id)),
+      garments: state.garments.filter((g) => !idSet.has(g.id)),
+      references: state.references.filter((r) => !idSet.has(r.id)),
+      selectedIds: new Set(),
+    }));
+
+    // Persist reference deletions
+    saveLocalReferences(get().references);
+
+    // Delete from DB (fire-and-forget)
+    if (userId) {
+      supabase.from("models").delete().in("id", ids).then();
+      supabase.from("garments").delete().in("id", ids).then();
+    }
+  },
+
+  renameAsset: (id, name) => {
+    // Optimistic update
     set((state) => ({
       models: state.models.map((m) => (m.id === id ? { ...m, name } : m)),
       garments: state.garments.map((g) => (g.id === id ? { ...g, name } : g)),
       references: state.references.map((r) =>
         r.id === id ? { ...r, name } : r
       ),
-    })),
+    }));
+
+    // Persist reference renames
+    saveLocalReferences(get().references);
+
+    // Update DB (fire-and-forget)
+    const userId = getUserId();
+    if (userId) {
+      supabase.from("models").update({ name }).eq("id", id).then();
+      supabase.from("garments").update({ name }).eq("id", id).then();
+    }
+  },
 
   uploadFiles: async (files, category) => {
     set({ isUploading: true });
-    // Simulate upload delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const userId = getUserId();
     const now = new Date().toISOString();
     const { addGarment, addReference } = get();
 
     for (const file of files) {
-      const id = `${category[0]}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const objectUrl = URL.createObjectURL(file);
+      const ext = file.name.split(".").pop() || "png";
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const assetName = file.name.replace(/\.[^/.]+$/, "");
+
+      if (category === "references") {
+        // References: local only (no DB table)
+        const objectUrl = URL.createObjectURL(file);
+        addReference({
+          id: `r-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: assetName,
+          thumbnailUrl: objectUrl,
+          originalUrl: objectUrl,
+          createdAt: now,
+        });
+        continue;
+      }
+
+      if (!userId) {
+        // Not logged in — fallback to local
+        const objectUrl = URL.createObjectURL(file);
+        if (category === "garments") {
+          addGarment({
+            id: `g-${Date.now()}`,
+            name: assetName,
+            thumbnailUrl: objectUrl,
+            originalUrl: objectUrl,
+            category: "tops",
+            createdAt: now,
+          });
+        }
+        continue;
+      }
+
+      // Upload to Supabase Storage
+      const storagePath = `${userId}/${fileName}`;
+      const bucket = category === "garments" ? "garments" : "models";
+      const { error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, file, { contentType: file.type });
+
+      if (uploadError) {
+        console.error("Upload failed:", uploadError);
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(storagePath);
+      const publicUrl = urlData.publicUrl;
 
       if (category === "garments") {
-        addGarment({
-          id,
-          name: file.name.replace(/\.[^/.]+$/, ""),
-          thumbnailUrl: objectUrl,
-          originalUrl: objectUrl,
-          category: "tops",
-          createdAt: now,
-        });
-      } else if (category === "references") {
-        addReference({
-          id,
-          name: file.name.replace(/\.[^/.]+$/, ""),
-          thumbnailUrl: objectUrl,
-          originalUrl: objectUrl,
-          createdAt: now,
-        });
+        const { data, error } = await supabase
+          .from("garments")
+          .insert({
+            user_id: userId,
+            name: assetName,
+            image_url: publicUrl,
+            thumbnail_url: publicUrl,
+            category: "tops",
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          addGarment(garmentRowToAsset(data as GarmentRow));
+        }
       }
     }
     set({ isUploading: false });
   },
 
   initialize: () => {
-    // Simulate initial data fetch - will be replaced with real API call
-    setTimeout(() => {
-      set({
-        models: MOCK_MODELS,
-        garments: MOCK_GARMENTS,
-        references: MOCK_REFERENCES,
-        isLoading: false,
-      });
-    }, 600);
+    const userId = getUserId();
+
+    // Load references from localStorage immediately
+    const localRefs = loadLocalReferences();
+    set({ references: localRefs });
+
+    if (!userId) {
+      set({ isLoading: false });
+      return;
+    }
+
+    // Fetch models and garments from Supabase
+    Promise.all([
+      supabase
+        .from("models")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("garments")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false }),
+    ]).then(([modelsRes, garmentsRes]) => {
+      const models = (modelsRes.data as ModelRow[] | null)?.map(modelRowToAsset) ?? [];
+      const garments = (garmentsRes.data as GarmentRow[] | null)?.map(garmentRowToAsset) ?? [];
+
+      set({ models, garments, isLoading: false });
+    }).catch(() => {
+      set({ isLoading: false });
+    });
   },
 }));

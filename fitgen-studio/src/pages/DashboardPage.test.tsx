@@ -1,10 +1,23 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderWithRouter, screen } from '@/test/test-utils';
 import { DashboardPage } from './DashboardPage';
 import { useAuthStore } from '@/stores/authStore';
 import { useAssetStore } from '@/stores/assetStore';
 import { useUsageStore } from '@/stores/usageStore';
 import { useGalleryStore } from '@/stores/galleryStore';
+
+// Mock Supabase (required by assetStore)
+vi.mock('@/lib/supabase', () => {
+  const chainable = () => {
+    const obj: Record<string, any> = {};
+    for (const m of ['from', 'select', 'insert', 'update', 'delete', 'eq', 'in', 'order', 'single']) {
+      obj[m] = vi.fn().mockReturnValue(obj);
+    }
+    obj.then = vi.fn().mockImplementation((cb: any) => { cb?.({ data: [], error: null }); return obj; });
+    return obj;
+  };
+  return { supabase: { ...chainable(), storage: { from: vi.fn().mockReturnValue({ upload: vi.fn(), getPublicUrl: vi.fn() }) } } };
+});
 
 describe('DashboardPage', () => {
   beforeEach(() => {

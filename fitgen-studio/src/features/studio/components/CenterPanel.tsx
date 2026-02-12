@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useStudioStore } from "@/stores/studioStore";
+import { useAssetStore } from "@/stores/assetStore";
 import { useAuthStore } from "@/stores/authStore";
+import { supabase } from "@/lib/supabase";
 import { downloadWithWatermark } from "@/lib/watermark";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -328,25 +330,49 @@ export function CenterPanel() {
     }
   }, []);
 
-  const handleSave = useCallback((image: GeneratedImage) => {
+  const handleSave = useCallback(async (image: GeneratedImage) => {
     if (!image.url) return;
     const { gender, bodyType, presetType } = useStudioStore.getState();
-    const { addModel, models } = useStudioStore.getState();
+    const studioModels = useStudioStore.getState().models;
     // Prevent duplicate saves
-    if (models.some((m) => m.id === image.id)) {
+    if (studioModels.some((m) => m.id === image.id)) {
       toast("Already saved to My Models", { icon: "ℹ️" });
       return;
     }
-    addModel({
+
+    const modelAsset = {
       id: image.id,
-      name: `Model ${models.length + 1}`,
+      name: `Model ${studioModels.length + 1}`,
       imageUrl: image.url,
       thumbnailUrl: image.thumbnailUrl || image.url,
       presetType: presetType ?? undefined,
       gender,
       bodyType,
       createdAt: image.createdAt,
-    });
+    };
+
+    // Add to both studio and asset stores
+    useStudioStore.getState().addModel(modelAsset);
+    useAssetStore.getState().addModel(modelAsset);
+
+    // Persist to Supabase DB
+    const userId = useAuthStore.getState().user?.id;
+    if (userId) {
+      const mapBt = (bt: string) => (bt === "plus" ? "plus-size" : bt);
+      supabase.from("models").insert({
+        user_id: userId,
+        name: modelAsset.name,
+        image_url: modelAsset.imageUrl,
+        thumbnail_url: modelAsset.thumbnailUrl,
+        gender,
+        body_type: mapBt(bodyType),
+        age_range: "20s",
+        style_preset: presetType ?? null,
+      }).then(({ error }) => {
+        if (error) console.error("Failed to save model to DB:", error);
+      });
+    }
+
     toast.success("Saved to My Models!");
   }, []);
 
