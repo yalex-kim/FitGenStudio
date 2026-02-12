@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,6 @@ import {
   ArrowUpFromLine,
   CheckSquare,
   X,
-  Loader2,
   SlidersHorizontal,
   ImageOff,
 } from "lucide-react";
@@ -98,7 +97,6 @@ export function GalleryPage() {
   const {
     images,
     isLoading,
-    hasMore,
     sortBy,
     setSortBy,
     filterStyle,
@@ -112,29 +110,8 @@ export function GalleryPage() {
     detailImageId,
     openDetail,
     closeDetail,
-    loadMore,
     deleteImages,
   } = useGalleryStore();
-
-  const sentinelRef = useRef<HTMLDivElement>(null);
-
-  // Intersection observer for infinite scroll
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading) {
-          loadMore();
-        }
-      },
-      { rootMargin: "200px" }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMore, isLoading, loadMore]);
 
   // Filtered and sorted images
   const filtered = useMemo(() => {
@@ -468,20 +445,13 @@ export function GalleryPage() {
         </div>
       )}
 
-      {/* Infinite scroll sentinel */}
-      <div ref={sentinelRef} className="flex justify-center py-4">
-        {isLoading && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading more images...
-          </div>
-        )}
-        {!hasMore && images.length > 0 && (
+      {images.length > 0 && (
+        <div className="flex justify-center py-4">
           <p className="text-sm text-muted-foreground">
-            All {images.length} images loaded
+            {images.length} image{images.length !== 1 ? "s" : ""} in gallery
           </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Detail Dialog */}
       <Dialog open={detailImage !== null} onOpenChange={() => closeDetail()}>

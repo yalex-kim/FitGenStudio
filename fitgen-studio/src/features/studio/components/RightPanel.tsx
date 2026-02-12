@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { useStudioStore } from "@/stores/studioStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useUsageStore } from "@/stores/usageStore";
+import { useGalleryStore } from "@/stores/galleryStore";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -34,6 +35,9 @@ import {
   Wand2,
   Loader2,
   AlertTriangle,
+  ArrowRightLeft,
+  Shirt,
+  User,
 } from "lucide-react";
 
 const STYLE_PRESETS = [
@@ -63,6 +67,26 @@ const POSE_PRESETS = [
   { id: "dynamic", label: "Dynamic" },
 ];
 
+/** Convert an image URL (blob: or data:) to { base64, mimeType }. */
+async function imageUrlToBase64(url: string): Promise<{ base64: string; mimeType: string }> {
+  // Already a data URL — extract parts directly
+  if (url.startsWith("data:")) {
+    const match = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (match) return { mimeType: match[1], base64: match[2] };
+  }
+  // Blob URL or other — fetch and convert
+  const res = await fetch(url);
+  const blob = await res.blob();
+  const mimeType = blob.type || "image/png";
+  const arrayBuffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return { base64: btoa(binary), mimeType };
+}
+
 export function RightPanel() {
   const {
     presetType,
@@ -89,11 +113,19 @@ export function RightPanel() {
     setPosePreset,
     selectedGarmentId,
     selectedModelId,
+    garments,
+    models,
+    generatedImages,
+    selectedImageIndex,
     isGenerating,
     setIsGenerating,
     setGeneratedImages,
     setGenerationProgress,
     setGenerationError,
+    isSwapping,
+    setIsSwapping,
+    setSwapResults,
+    setSwapError,
   } = useStudioStore();
 
   const { user } = useAuthStore();
@@ -107,7 +139,18 @@ export function RightPanel() {
   const isLow = !isUnlimited && remaining > 0 && remaining <= Math.ceil(limit * 0.1);
   const isExhausted = !isUnlimited && remaining === 0;
 
-  const canClickGenerate = (selectedGarmentId || presetType) && !isGenerating && !isExhausted;
+  // Determine swap mode: garment selected AND a model image available
+  const selectedGarment = garments.find((g) => g.id === selectedGarmentId);
+  const selectedModel = models.find((m) => m.id === selectedModelId);
+  const selectedGeneratedImage =
+    selectedImageIndex !== null ? generatedImages[selectedImageIndex] : null;
+
+  // A model image is available from either a saved model or a selected generated image
+  const hasModelImage = !!(selectedModel || selectedGeneratedImage);
+  const isSwapMode = !!(selectedGarmentId && hasModelImage);
+
+  const canClickGenerate =
+    (isSwapMode || selectedGarmentId || presetType) && !isGenerating && !isSwapping && !isExhausted;
 
   const mapBodyType = (bt: string) => (bt === "plus" ? "plus-size" : bt);
   const mapBackground = (bg: string): string => {
@@ -189,6 +232,7 @@ export function RightPanel() {
       }
 
       setGeneratedImages(images);
+      useGalleryStore.getState().addImages(images);
       toast.success(`${images.length} image${images.length > 1 ? "s" : ""} generated!`);
     } catch (err: any) {
       const errorMsg = err?.message || "Generation failed. Please try again.";
@@ -196,6 +240,108 @@ export function RightPanel() {
       toast.error(errorMsg);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const executeSwap = async () => {
+    if (!selectedGarment) return;
+
+    // Resolve the model image URL
+    const modelImageUrl = selectedModel?.imageUrl ?? selectedGeneratedImage?.url;
+    if (!modelImageUrl) return;
+
+    setIsSwapping(true);
+    setSwapError(null);
+    setIsGenerating(true);
+    setGenerationError(null);
+    setGenerationProgress(0);
+    recordUsage();
+
+    try {
+      setGenerationProgress(10);
+
+      const [modelData, garmentData] = await Promise.all([
+        imageUrlToBase64(modelImageUrl),
+        imageUrlToBase64(selectedGarment.originalUrl),
+      ]);
+
+      setGenerationProgress(20);
+
+      const swapBody = {
+        modelImageBase64: modelData.base64,
+        garmentImageBase64: garmentData.base64,
+        garmentCategory: selectedGarment.category,
+        modelMimeType: modelData.mimeType,
+        garmentMimeType: garmentData.mimeType,
+        fitOptions: { tuckIn, sleeveRoll, buttonOpen, autoCoordination },
+      };
+
+      // Generate 4 swap variations in parallel
+      const promises = Array.from({ length: 4 }, () =>
+        fetch("/api/generate/swap", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-id": user?.id || "anonymous",
+            "x-user-tier": tier,
+          },
+          body: JSON.stringify(swapBody),
+        }).then(async (res) => {
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: "Swap failed" }));
+            throw new Error(err.error || `HTTP ${res.status}`);
+          }
+          return res.json();
+        })
+      );
+
+      setGenerationProgress(30);
+
+      const results = await Promise.allSettled(promises);
+      setGenerationProgress(90);
+
+      const images = results
+        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
+        .map((r) => ({
+          id: crypto.randomUUID(),
+          url: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
+          thumbnailUrl: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
+          prompt: r.value.data.promptUsed || "",
+          modelId: selectedModelId || selectedGeneratedImage?.id || "",
+          garmentId: selectedGarmentId || undefined,
+          createdAt: new Date().toISOString(),
+          status: "completed" as const,
+        }));
+
+      setGenerationProgress(100);
+
+      if (images.length === 0) {
+        const firstError = results.find(
+          (r): r is PromiseRejectedResult => r.status === "rejected"
+        );
+        throw new Error(firstError?.reason?.message || "All swap generations failed");
+      }
+
+      setSwapResults(images);
+      setGeneratedImages(images);
+      useGalleryStore.getState().addImages(images);
+      toast.success(`${images.length} lookbook image${images.length > 1 ? "s" : ""} generated!`);
+    } catch (err: any) {
+      const errorMsg = err?.message || "Clothing swap failed. Please try again.";
+      setSwapError(errorMsg);
+      setGenerationError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setIsSwapping(false);
+      setIsGenerating(false);
+    }
+  };
+
+  const runGeneration = async () => {
+    if (isSwapMode) {
+      await executeSwap();
+    } else {
+      await executeGeneration();
     }
   };
 
@@ -208,12 +354,12 @@ export function RightPanel() {
       setShowLowCreditDialog(true);
       return;
     }
-    await executeGeneration();
+    await runGeneration();
   };
 
   const handleConfirmLowCredit = async () => {
     setShowLowCreditDialog(false);
-    await executeGeneration();
+    await runGeneration();
   };
 
   return (
@@ -408,8 +554,28 @@ export function RightPanel() {
         </div>
       </ScrollArea>
 
-      {/* Section 4: Generate */}
+      {/* Section 4: Mode Indicator + Generate */}
       <div className="border-t border-border p-3">
+        {/* Mode indicator */}
+        <div className="mb-2 flex items-center justify-center gap-1.5">
+          {isSwapMode ? (
+            <Badge variant="default" className="gap-1 text-[10px]">
+              <ArrowRightLeft className="h-3 w-3" />
+              Lookbook Mode (Model + Garment)
+            </Badge>
+          ) : selectedGarmentId ? (
+            <Badge variant="outline" className="gap-1 text-[10px]">
+              <Shirt className="h-3 w-3" />
+              Garment selected — select a model to swap
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="gap-1 text-[10px]">
+              <User className="h-3 w-3" />
+              Model Generation
+            </Badge>
+          )}
+        </div>
+
         {isExhausted && (
           <div className="mb-2 flex items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1.5 text-destructive">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -418,7 +584,7 @@ export function RightPanel() {
             </p>
           </div>
         )}
-        {!canClickGenerate && !isGenerating && !isExhausted && (
+        {!canClickGenerate && !isGenerating && !isSwapping && !isExhausted && (
           <p className="mb-2 text-center text-[10px] text-muted-foreground">
             Select a style preset or upload a garment to generate
           </p>
@@ -430,19 +596,24 @@ export function RightPanel() {
           onClick={handleGenerate}
           data-testid="generate-button"
         >
-          {isGenerating ? (
+          {isGenerating || isSwapping ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generating...
+              {isSwapping ? "Swapping Garment..." : "Generating..."}
+            </>
+          ) : isSwapMode ? (
+            <>
+              <ArrowRightLeft className="mr-2 h-4 w-4" />
+              Swap Garment onto Model
             </>
           ) : (
             <>
               <Wand2 className="mr-2 h-4 w-4" />
-              Generate Lookbook
+              Generate Model
             </>
           )}
         </Button>
-        {isGenerating && (
+        {(isGenerating || isSwapping) && (
           <p className="mt-1 text-center text-[10px] text-muted-foreground">
             Estimated time: ~30 seconds
           </p>

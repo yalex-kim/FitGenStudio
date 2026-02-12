@@ -1,9 +1,23 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useGalleryStore } from './galleryStore';
+import type { GeneratedImage } from '@/types';
+
+function makeImage(id: string): GeneratedImage {
+  return {
+    id,
+    url: `https://example.com/${id}.png`,
+    thumbnailUrl: `https://example.com/${id}-thumb.png`,
+    prompt: `prompt for ${id}`,
+    modelId: 'm1',
+    createdAt: new Date().toISOString(),
+    status: 'completed',
+  };
+}
 
 describe('galleryStore', () => {
   beforeEach(() => {
     useGalleryStore.setState({
+      images: [],
       searchQuery: '',
       filterStyle: 'all',
       sortBy: 'newest',
@@ -13,8 +27,21 @@ describe('galleryStore', () => {
     });
   });
 
-  it('should have initial images', () => {
-    expect(useGalleryStore.getState().images.length).toBeGreaterThan(0);
+  it('should start with empty images', () => {
+    expect(useGalleryStore.getState().images.length).toBe(0);
+  });
+
+  describe('addImages', () => {
+    it('should add images to the front', () => {
+      const img1 = makeImage('img-1');
+      const img2 = makeImage('img-2');
+      useGalleryStore.getState().addImages([img1]);
+      useGalleryStore.getState().addImages([img2]);
+      const { images } = useGalleryStore.getState();
+      expect(images.length).toBe(2);
+      expect(images[0].id).toBe('img-2');
+      expect(images[1].id).toBe('img-1');
+    });
   });
 
   describe('filters', () => {
@@ -35,13 +62,16 @@ describe('galleryStore', () => {
   });
 
   describe('selection', () => {
-    it('should toggle selection', () => {
-      const firstId = useGalleryStore.getState().images[0].id;
-      useGalleryStore.getState().toggleSelection(firstId);
-      expect(useGalleryStore.getState().selectedIds.has(firstId)).toBe(true);
+    beforeEach(() => {
+      useGalleryStore.getState().addImages([makeImage('s1'), makeImage('s2')]);
+    });
 
-      useGalleryStore.getState().toggleSelection(firstId);
-      expect(useGalleryStore.getState().selectedIds.has(firstId)).toBe(false);
+    it('should toggle selection', () => {
+      useGalleryStore.getState().toggleSelection('s1');
+      expect(useGalleryStore.getState().selectedIds.has('s1')).toBe(true);
+
+      useGalleryStore.getState().toggleSelection('s1');
+      expect(useGalleryStore.getState().selectedIds.has('s1')).toBe(false);
     });
 
     it('should select all', () => {
@@ -59,33 +89,36 @@ describe('galleryStore', () => {
 
   describe('detail view', () => {
     it('should open detail', () => {
-      useGalleryStore.getState().openDetail('gen-0');
-      expect(useGalleryStore.getState().detailImageId).toBe('gen-0');
+      useGalleryStore.getState().openDetail('d1');
+      expect(useGalleryStore.getState().detailImageId).toBe('d1');
     });
 
     it('should close detail', () => {
-      useGalleryStore.getState().openDetail('gen-0');
+      useGalleryStore.getState().openDetail('d1');
       useGalleryStore.getState().closeDetail();
       expect(useGalleryStore.getState().detailImageId).toBeNull();
     });
   });
 
   describe('delete', () => {
+    beforeEach(() => {
+      useGalleryStore.getState().addImages([makeImage('del-1'), makeImage('del-2'), makeImage('del-3')]);
+    });
+
     it('should delete images', () => {
-      const initialCount = useGalleryStore.getState().images.length;
-      useGalleryStore.getState().deleteImages(['gen-0', 'gen-1']);
-      expect(useGalleryStore.getState().images.length).toBe(initialCount - 2);
+      useGalleryStore.getState().deleteImages(['del-1', 'del-2']);
+      expect(useGalleryStore.getState().images.length).toBe(1);
     });
 
     it('should clear selection after delete', () => {
-      useGalleryStore.getState().toggleSelection('gen-0');
-      useGalleryStore.getState().deleteImages(['gen-0']);
+      useGalleryStore.getState().toggleSelection('del-1');
+      useGalleryStore.getState().deleteImages(['del-1']);
       expect(useGalleryStore.getState().selectedIds.size).toBe(0);
     });
 
     it('should close detail if deleted image is in detail', () => {
-      useGalleryStore.getState().openDetail('gen-0');
-      useGalleryStore.getState().deleteImages(['gen-0']);
+      useGalleryStore.getState().openDetail('del-1');
+      useGalleryStore.getState().deleteImages(['del-1']);
       expect(useGalleryStore.getState().detailImageId).toBeNull();
     });
   });

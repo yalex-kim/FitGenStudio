@@ -64,6 +64,14 @@ export interface StudioState {
   toggleFavorite: (imageId: string) => void;
   compareImageId: string | null;
   setCompareImageId: (id: string | null) => void;
+
+  // Swap mode
+  swapResults: GeneratedImage[];
+  setSwapResults: (images: GeneratedImage[]) => void;
+  isSwapping: boolean;
+  setIsSwapping: (v: boolean) => void;
+  swapError: string | null;
+  setSwapError: (error: string | null) => void;
 }
 
 export const useStudioStore = create<StudioState>()((set) => ({
@@ -142,4 +150,12 @@ export const useStudioStore = create<StudioState>()((set) => ({
     }),
   compareImageId: null,
   setCompareImageId: (id) => set({ compareImageId: id }),
+
+  // Swap mode
+  swapResults: [],
+  setSwapResults: (images) => set({ swapResults: images }),
+  isSwapping: false,
+  setIsSwapping: (v) => set({ isSwapping: v }),
+  swapError: null,
+  setSwapError: (error) => set({ swapError: error }),
 }));

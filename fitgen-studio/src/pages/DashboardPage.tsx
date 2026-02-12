@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -10,6 +9,9 @@ import {
   Clock,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import { useUsageStore } from "@/stores/usageStore";
+import { useAssetStore } from "@/stores/assetStore";
+import { useGalleryStore } from "@/stores/galleryStore";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,37 +22,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const MOCK_RECENT_PROJECTS = [
-  {
-    id: "1",
-    name: "Spring Collection",
-    thumbnailUrl: null,
-    imagesCount: 12,
-    updatedAt: "2026-02-10",
-  },
-  {
-    id: "2",
-    name: "Street Wear Lookbook",
-    thumbnailUrl: null,
-    imagesCount: 8,
-    updatedAt: "2026-02-09",
-  },
-  {
-    id: "3",
-    name: "Summer Essentials",
-    thumbnailUrl: null,
-    imagesCount: 4,
-    updatedAt: "2026-02-08",
-  },
-  {
-    id: "4",
-    name: "Casual Basics",
-    thumbnailUrl: null,
-    imagesCount: 6,
-    updatedAt: "2026-02-07",
-  },
-];
+import type { Tier } from "@/lib/usageLimits";
 
 function DashboardSkeleton() {
   return (
@@ -107,15 +79,23 @@ function DashboardSkeleton() {
 export function DashboardPage() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Simulate data fetch - will be replaced with real API call
-    const timer = setTimeout(() => setIsLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  const usedThisMonth = useUsageStore((s) => s.usedThisMonth);
+  const getRemaining = useUsageStore((s) => s.getRemaining);
+  const getLimit = useUsageStore((s) => s.getLimit);
 
-  if (isLoading) {
+  const modelsCount = useAssetStore((s) => s.models.length);
+  const assetsLoading = useAssetStore((s) => s.isLoading);
+
+  const galleryImages = useGalleryStore((s) => s.images);
+
+  const tier: Tier = (user?.tier as Tier) ?? "free";
+  const remaining = getRemaining(tier);
+  const limit = getLimit(tier);
+
+  const recentImages = galleryImages.slice(0, 8);
+
+  if (assetsLoading) {
     return <DashboardSkeleton />;
   }
 
@@ -151,7 +131,7 @@ export function DashboardPage() {
             <Image className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">128</div>
+            <div className="text-2xl font-bold">{usedThisMonth}</div>
             <p className="text-xs text-muted-foreground">This month</p>
           </CardContent>
         </Card>
@@ -163,7 +143,7 @@ export function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">5</div>
+            <div className="text-2xl font-bold">{modelsCount}</div>
             <p className="text-xs text-muted-foreground">In your library</p>
           </CardContent>
         </Card>
@@ -176,10 +156,10 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {user?.creditsRemaining ?? 0}
+              {remaining === Infinity ? "Unlimited" : remaining}
             </div>
             <p className="text-xs text-muted-foreground">
-              of {user?.creditsTotal ?? 0} total
+              of {limit === Infinity ? "Unlimited" : limit} total
             </p>
           </CardContent>
         </Card>
@@ -189,15 +169,13 @@ export function DashboardPage() {
               Plan
             </CardTitle>
             <Badge variant="secondary" className="capitalize">
-              {user?.tier ?? "free"}
+              {tier}
             </Badge>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold capitalize">
-              {user?.tier ?? "Free"}
-            </div>
+            <div className="text-2xl font-bold capitalize">{tier}</div>
             <p className="text-xs text-muted-foreground">
-              {user?.tier === "free" ? (
+              {tier === "free" ? (
                 <button
                   onClick={() => navigate("/settings")}
                   className="text-primary underline-offset-4 hover:underline"
@@ -212,10 +190,10 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Recent Projects */}
+      {/* Recent Images */}
       <div>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Recent Projects</h2>
+          <h2 className="text-lg font-semibold">Recent Generations</h2>
           <Button
             variant="ghost"
             size="sm"
@@ -225,31 +203,59 @@ export function DashboardPage() {
             <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {MOCK_RECENT_PROJECTS.map((project) => (
-            <Card
-              key={project.id}
-              className="cursor-pointer transition-shadow hover:shadow-md"
+        {recentImages.length === 0 ? (
+          <Card className="flex flex-col items-center justify-center p-12 text-center">
+            <Image className="mb-4 h-12 w-12 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">
+              No images generated yet. Head to the studio to create your first
+              lookbook!
+            </p>
+            <Button
+              className="mt-4"
+              variant="outline"
               onClick={() => navigate("/studio")}
             >
-              <div className="aspect-[4/3] rounded-t-xl bg-muted flex items-center justify-center">
-                <Image className="h-8 w-8 text-muted-foreground/40" />
-              </div>
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-sm">{project.name}</CardTitle>
-                <CardDescription className="flex items-center gap-1 text-xs">
-                  <Clock className="h-3 w-3" />
-                  {project.updatedAt}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 pt-0">
-                <Badge variant="secondary" className="text-xs">
-                  {project.imagesCount} images
-                </Badge>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              <Plus className="mr-2 h-4 w-4" />
+              Go to Studio
+            </Button>
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {recentImages.map((img) => (
+              <Card
+                key={img.id}
+                className="cursor-pointer transition-shadow hover:shadow-md"
+                onClick={() => navigate("/gallery")}
+              >
+                <div className="aspect-[4/3] rounded-t-xl bg-muted flex items-center justify-center overflow-hidden">
+                  {img.thumbnailUrl ? (
+                    <img
+                      src={img.thumbnailUrl}
+                      alt={img.prompt}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Image className="h-8 w-8 text-muted-foreground/40" />
+                  )}
+                </div>
+                <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-sm line-clamp-1">
+                    {img.prompt}
+                  </CardTitle>
+                  <CardDescription className="flex items-center gap-1 text-xs">
+                    <Clock className="h-3 w-3" />
+                    {new Date(img.createdAt).toLocaleDateString()}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-0">
+                  <Badge variant="secondary" className="text-xs">
+                    {img.status}
+                  </Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

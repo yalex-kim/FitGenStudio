@@ -1,12 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderWithRouter, screen } from '@/test/test-utils';
-import { act } from '@testing-library/react';
 import { DashboardPage } from './DashboardPage';
 import { useAuthStore } from '@/stores/authStore';
+import { useAssetStore } from '@/stores/assetStore';
+import { useUsageStore } from '@/stores/usageStore';
+import { useGalleryStore } from '@/stores/galleryStore';
 
 describe('DashboardPage', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     useAuthStore.setState({
       user: {
         id: '1',
@@ -19,63 +20,80 @@ describe('DashboardPage', () => {
       isAuthenticated: true,
       isLoading: false,
     });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  function renderAndWaitForLoad() {
-    renderWithRouter(<DashboardPage />);
-    // Advance past the 600ms loading timer inside act() to flush state updates
-    act(() => {
-      vi.advanceTimersByTime(700);
+    useAssetStore.setState({
+      models: [
+        { id: 'm1', name: 'Model A', thumbnailUrl: '', imageUrl: '', gender: 'female', bodyType: 'slim', createdAt: '' },
+        { id: 'm2', name: 'Model B', thumbnailUrl: '', imageUrl: '', gender: 'male', bodyType: 'athletic', createdAt: '' },
+      ],
+      isLoading: false,
     });
-  }
+    useUsageStore.setState({
+      usedThisMonth: 13,
+      currentMonth: '2026-02',
+    });
+    useGalleryStore.setState({
+      images: [
+        { id: 'g1', url: '', thumbnailUrl: '', prompt: 'Spring editorial look', modelId: 'm1', createdAt: '2026-02-10T10:00:00Z', status: 'completed' as const },
+        { id: 'g2', url: '', thumbnailUrl: '', prompt: 'Street style outfit', modelId: 'm2', createdAt: '2026-02-09T10:00:00Z', status: 'completed' as const },
+      ],
+    });
+  });
 
   it('should display welcome message with user first name', () => {
-    renderAndWaitForLoad();
+    renderWithRouter(<DashboardPage />);
     expect(screen.getByText(/welcome back, demo/i)).toBeInTheDocument();
   });
 
   it('should display quick action buttons', () => {
-    renderAndWaitForLoad();
+    renderWithRouter(<DashboardPage />);
     expect(screen.getByRole('button', { name: /new lookbook/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /upload garment/i })).toBeInTheDocument();
   });
 
   it('should display stats cards', () => {
-    renderAndWaitForLoad();
+    renderWithRouter(<DashboardPage />);
     expect(screen.getByText('Images Generated')).toBeInTheDocument();
     expect(screen.getByText('Models Saved')).toBeInTheDocument();
     expect(screen.getByText('Credits Remaining')).toBeInTheDocument();
     expect(screen.getByText('Plan')).toBeInTheDocument();
   });
 
-  it('should display user credits', () => {
-    renderAndWaitForLoad();
+  it('should display usage-based stats from stores', () => {
+    renderWithRouter(<DashboardPage />);
+    // usedThisMonth = 13
+    expect(screen.getByText('13')).toBeInTheDocument();
+    // models.length = 2
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
+  it('should display credits from usageStore', () => {
+    renderWithRouter(<DashboardPage />);
+    // Pro tier: limit=500, used=13, remaining=487
     expect(screen.getByText('487')).toBeInTheDocument();
     expect(screen.getByText('of 500 total')).toBeInTheDocument();
   });
 
-  it('should display recent projects', () => {
-    renderAndWaitForLoad();
-    expect(screen.getByText('Recent Projects')).toBeInTheDocument();
-    expect(screen.getByText('Spring Collection')).toBeInTheDocument();
-    expect(screen.getByText('Street Wear Lookbook')).toBeInTheDocument();
-    expect(screen.getByText('Summer Essentials')).toBeInTheDocument();
-    expect(screen.getByText('Casual Basics')).toBeInTheDocument();
+  it('should display recent generations from gallery', () => {
+    renderWithRouter(<DashboardPage />);
+    expect(screen.getByText('Recent Generations')).toBeInTheDocument();
+    expect(screen.getByText('Spring editorial look')).toBeInTheDocument();
+    expect(screen.getByText('Street style outfit')).toBeInTheDocument();
   });
 
   it('should display View all button', () => {
-    renderAndWaitForLoad();
+    renderWithRouter(<DashboardPage />);
     expect(screen.getByRole('button', { name: /view all/i })).toBeInTheDocument();
   });
 
   it('should show pro tier', () => {
-    renderAndWaitForLoad();
-    // The tier is displayed as bold text in the Plan card
+    renderWithRouter(<DashboardPage />);
     const proElements = screen.getAllByText(/pro/i);
     expect(proElements.length).toBeGreaterThan(0);
+  });
+
+  it('should show empty state when no gallery images', () => {
+    useGalleryStore.setState({ images: [] });
+    renderWithRouter(<DashboardPage />);
+    expect(screen.getByText(/no images generated yet/i)).toBeInTheDocument();
   });
 });

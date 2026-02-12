@@ -7,6 +7,7 @@ describe('GalleryPage', () => {
   beforeEach(() => {
     // Reset store to initial state with mock images
     useGalleryStore.setState({
+      images: [],
       searchQuery: '',
       filterStyle: 'all',
       sortBy: 'newest',
@@ -32,8 +33,18 @@ describe('GalleryPage', () => {
   });
 
   it('should display images from the store', () => {
+    useGalleryStore.getState().addImages([
+      {
+        id: 'test-1',
+        url: 'https://example.com/1.png',
+        thumbnailUrl: 'https://example.com/1-thumb.png',
+        prompt: 'Chic editorial model in white studio',
+        modelId: 'm1',
+        createdAt: new Date().toISOString(),
+        status: 'completed',
+      },
+    ]);
     renderWithRouter(<GalleryPage />);
-    // The store has mock images with prompts
     const matches = screen.getAllByText(/chic editorial model/i);
     expect(matches.length).toBeGreaterThan(0);
   });

@@ -24,6 +24,9 @@ describe('studioStore', () => {
       generatedImages: [],
       selectedImageIndex: null,
       isGenerating: false,
+      swapResults: [],
+      isSwapping: false,
+      swapError: null,
     });
   });
 
