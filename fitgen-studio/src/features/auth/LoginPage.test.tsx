@@ -1,7 +1,22 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderWithRouter, screen, userEvent } from '@/test/test-utils';
 import { LoginPage } from './LoginPage';
 import { useAuthStore } from '@/stores/authStore';
+
+// Mock Supabase so login() doesn't hit real API
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      signInWithPassword: vi.fn().mockImplementation(
+        () => new Promise(() => {}) // never resolves → keeps isLoading: true
+      ),
+      signInWithOAuth: vi.fn().mockResolvedValue({ error: null }),
+      signOut: vi.fn().mockResolvedValue({ error: null }),
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    },
+  },
+}));
 
 describe('LoginPage', () => {
   beforeEach(() => {
