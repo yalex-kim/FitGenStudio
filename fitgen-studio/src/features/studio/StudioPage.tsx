@@ -92,7 +92,7 @@ export function StudioPage() {
           <CenterPanel />
         </div>
         {!rightCollapsed && (
-          <div className="w-72 shrink-0 overflow-hidden border-l border-border">
+          <div className="w-72 shrink-0 overflow-y-auto border-l border-border">
             <RightPanel />
           </div>
         )}
@@ -109,7 +109,7 @@ export function StudioPage() {
           <CenterPanel />
         </div>
         {!rightCollapsed && (
-          <div className="h-1/3 overflow-hidden border-t border-border">
+          <div className="min-h-[240px] overflow-y-auto border-t border-border">
             <RightPanel />
           </div>
         )}

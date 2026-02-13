@@ -555,7 +555,7 @@ export function RightPanel() {
       </ScrollArea>
 
       {/* Section 4: Mode Indicator + Generate */}
-      <div className="border-t border-border p-3">
+      <div className="shrink-0 border-t border-border p-3">
         {/* Mode indicator */}
         <div className="mb-2 flex items-center justify-center gap-1.5">
           {isSwapMode ? (
