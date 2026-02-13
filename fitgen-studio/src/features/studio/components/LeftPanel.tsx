@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { useStudioStore } from "@/stores/studioStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UploadDropzone } from "./UploadDropzone";
 import { Shirt, Users, Palette, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StudioLeftTab } from "@/stores/studioStore";
+import type { GarmentAsset } from "@/types";
 
 export function LeftPanel() {
   const {
@@ -25,6 +28,8 @@ export function LeftPanel() {
     removeReference,
   } = useStudioStore();
 
+  const [garmentCategory, setGarmentCategory] = useState<GarmentAsset["category"]>("tops");
+
   const handleGarmentUpload = (files: File[]) => {
     files.forEach((file) => {
       const id = crypto.randomUUID();
@@ -34,7 +39,7 @@ export function LeftPanel() {
         name: file.name.replace(/\.[^/.]+$/, ""),
         thumbnailUrl: url,
         originalUrl: url,
-        category: "tops",
+        category: garmentCategory,
         createdAt: new Date().toISOString(),
       });
     });
@@ -79,6 +84,18 @@ export function LeftPanel() {
         <TabsContent value="product" className="flex-1 overflow-hidden mt-0">
           <ScrollArea className="h-full">
             <div className="space-y-3 p-3">
+              <Select value={garmentCategory} onValueChange={(v) => setGarmentCategory(v as GarmentAsset["category"])}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tops">Tops</SelectItem>
+                  <SelectItem value="outerwear">Outerwear</SelectItem>
+                  <SelectItem value="bottoms">Bottoms</SelectItem>
+                  <SelectItem value="dresses">Dresses</SelectItem>
+                  <SelectItem value="accessories">Accessories</SelectItem>
+                </SelectContent>
+              </Select>
               <UploadDropzone
                 onFilesAccepted={handleGarmentUpload}
                 label="Drop garment images"

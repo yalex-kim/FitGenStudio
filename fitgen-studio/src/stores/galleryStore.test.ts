@@ -1,4 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('@/lib/supabase', () => {
+  const chainable = () => {
+    const obj: Record<string, any> = {};
+    for (const m of ['from', 'select', 'insert', 'update', 'delete', 'eq', 'in', 'order', 'single', 'gte']) {
+      obj[m] = vi.fn().mockReturnValue(obj);
+    }
+    obj.then = vi.fn().mockImplementation((cb: any) => { cb?.({ data: [], error: null }); return obj; });
+    return obj;
+  };
+  return { supabase: { ...chainable(), storage: { from: vi.fn().mockReturnValue({ upload: vi.fn(), getPublicUrl: vi.fn() }) } } };
+});
+
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: { getState: vi.fn().mockReturnValue({ user: null }) },
+}));
+
 import { useGalleryStore } from './galleryStore';
 import type { GeneratedImage } from '@/types';
 

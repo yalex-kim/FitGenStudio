@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "./authStore";
 import type { GeneratedImage } from "@/types";
+import type { GenerationRow, GenerationInsert } from "@/types/database";
 
 export type GallerySortBy = "newest" | "oldest";
 export type GalleryFilterStyle = "all" | "lovely" | "chic" | "sporty" | "street";
@@ -31,11 +34,47 @@ export interface GalleryState {
   // Actions
   addImages: (images: GeneratedImage[]) => void;
   deleteImages: (ids: string[]) => void;
+  initialize: () => void;
+}
+
+function getUserId(): string | null {
+  return useAuthStore.getState().user?.id ?? null;
+}
+
+function generationRowToImage(row: GenerationRow): GeneratedImage {
+  return {
+    id: row.id,
+    url: row.image_url,
+    thumbnailUrl: row.thumbnail_url || row.image_url,
+    prompt: row.prompt_used || "",
+    modelId: row.model_id || "",
+    garmentId: row.garment_id || undefined,
+    createdAt: row.created_at,
+    status: "completed",
+  };
+}
+
+function imageToGenerationInsert(
+  image: GeneratedImage,
+  userId: string,
+): GenerationInsert {
+  return {
+    id: image.id,
+    user_id: userId,
+    type: image.garmentId ? "swap" : "model",
+    image_url: image.url,
+    thumbnail_url: image.thumbnailUrl,
+    prompt_used: image.prompt || null,
+    model_id: image.modelId || null,
+    garment_id: image.garmentId || null,
+    project_id: null,
+    gemini_model_version: null,
+  };
 }
 
 export const useGalleryStore = create<GalleryState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       images: [],
       isLoading: false,
 
@@ -67,12 +106,28 @@ export const useGalleryStore = create<GalleryState>()(
       openDetail: (id) => set({ detailImageId: id }),
       closeDetail: () => set({ detailImageId: null }),
 
-      addImages: (images) =>
+      addImages: (images) => {
         set((state) => ({
           images: [...images, ...state.images],
-        })),
+        }));
 
-      deleteImages: (ids) =>
+        // Insert into Supabase (fire-and-forget)
+        const userId = getUserId();
+        if (userId) {
+          const rows = images.map((img) =>
+            imageToGenerationInsert(img, userId),
+          );
+          supabase
+            .from("generations")
+            .insert(rows)
+            .then(({ error }) => {
+              if (error)
+                console.error("Failed to save generations to DB:", error);
+            });
+        }
+      },
+
+      deleteImages: (ids) => {
         set((state) => {
           const idSet = new Set(ids);
           return {
@@ -83,7 +138,57 @@ export const useGalleryStore = create<GalleryState>()(
                 ? null
                 : state.detailImageId,
           };
-        }),
+        });
+
+        // Delete from Supabase (fire-and-forget)
+        const userId = getUserId();
+        if (userId) {
+          supabase
+            .from("generations")
+            .delete()
+            .in("id", ids)
+            .then(({ error }) => {
+              if (error)
+                console.error("Failed to delete generations from DB:", error);
+            });
+        }
+      },
+
+      initialize: () => {
+        const userId = getUserId();
+        if (!userId) return;
+
+        set({ isLoading: true });
+
+        supabase
+          .from("generations")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .then(({ data, error }) => {
+            if (error) {
+              console.error("Failed to load generations:", error);
+              set({ isLoading: false });
+              return;
+            }
+
+            const dbImages = (data as GenerationRow[]).map(
+              generationRowToImage,
+            );
+
+            // Merge: DB is source of truth, but keep any local-only images
+            // that haven't been synced yet
+            const dbIds = new Set(dbImages.map((img) => img.id));
+            const localOnly = get().images.filter(
+              (img) => !dbIds.has(img.id),
+            );
+
+            set({
+              images: [...localOnly, ...dbImages],
+              isLoading: false,
+            });
+          });
+      },
     }),
     {
       name: "fitgen-gallery",
@@ -92,6 +197,6 @@ export const useGalleryStore = create<GalleryState>()(
         ...current,
         ...(persisted as Partial<GalleryState>),
       }),
-    }
-  )
+    },
+  ),
 );

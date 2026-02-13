@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import type { AuthState, User } from "@/types";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { useAssetStore } from "./assetStore";
+import { useGalleryStore } from "./galleryStore";
 
 function mapSupabaseUser(su: SupabaseUser): User {
   return {
@@ -39,6 +40,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
           isLoading: false,
         });
         useAssetStore.getState().initialize();
+        useGalleryStore.getState().initialize();
       } else {
         set({ isLoading: false });
       }
@@ -51,6 +53,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
             isLoading: false,
           });
           useAssetStore.getState().initialize();
+          useGalleryStore.getState().initialize();
         } else {
           set({
             user: null,

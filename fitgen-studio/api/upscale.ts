@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { GoogleGenAI } from '@google/genai';
 
 interface UpscaleRequestBody {
   imageBase64: string;
@@ -9,11 +10,9 @@ interface UpscaleRequestBody {
 const VALID_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_BASE64_SIZE = 20 * 1024 * 1024 * 1.37;
 
-const GEMINI_MODEL = 'gemini-2.0-flash-exp';
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+const GEMINI_MODEL = 'gemini-3-pro-image-preview';
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
-const REQUEST_TIMEOUT_MS = 60_000;
 
 function validateBody(body: unknown): { valid: true; data: UpscaleRequestBody } | { valid: false; error: string } {
   if (!body || typeof body !== 'object') {
@@ -55,62 +54,45 @@ async function callGeminiUpscale(imageBase64: string, mimeType: string, scaleFac
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
 
-  const url = `${GEMINI_BASE_URL}/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const client = new GoogleGenAI({ apiKey });
   const prompt = buildUpscalePrompt(scaleFactor);
-
-  const body = {
-    contents: [{
-      parts: [
-        { text: prompt },
-        { inlineData: { mimeType, data: imageBase64 } },
-      ],
-    }],
-    generationConfig: {
-      responseModalities: ['TEXT', 'IMAGE'],
-      temperature: 0.4,
-      topP: 0.8,
-    },
-  };
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1)));
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
+      const response = await client.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType, data: imageBase64 } },
+          ],
+        }],
       });
 
-      clearTimeout(timeout);
+      const parts = response.candidates?.[0]?.content?.parts;
+      if (!parts) continue;
 
-      if (res.status === 429) continue;
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (res.status >= 500) continue;
-        throw { status: res.status, body: err };
+      for (const part of parts) {
+        if (part.inlineData && part.inlineData.data) {
+          return {
+            imageBase64: part.inlineData.data,
+            mimeType: part.inlineData.mimeType || 'image/png',
+            timestamp: new Date().toISOString(),
+            modelVersion: GEMINI_MODEL,
+          };
+        }
       }
 
-      const data = await res.json();
-      const imagePart = data.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-      if (!imagePart?.inlineData) continue;
-
-      return {
-        imageBase64: imagePart.inlineData.data,
-        mimeType: imagePart.inlineData.mimeType,
-        timestamp: new Date().toISOString(),
-        modelVersion: GEMINI_MODEL,
-      };
+      continue;
     } catch (e: any) {
-      clearTimeout(timeout);
-      if (e?.status) throw e;
-      if (attempt === MAX_RETRIES - 1) throw e;
+      if (e?.status === 429 && attempt < MAX_RETRIES - 1) continue;
+      if (e?.status >= 500 && attempt < MAX_RETRIES - 1) continue;
+      throw e;
     }
   }
 

@@ -30,7 +30,7 @@ export interface AssetState {
   addReference: (ref: ReferenceAsset) => void;
   removeAssets: (ids: string[]) => void;
   renameAsset: (id: string, name: string) => void;
-  uploadFiles: (files: File[], category: AssetCategory) => Promise<void>;
+  uploadFiles: (files: File[], category: AssetCategory, garmentCategory?: GarmentAsset["category"]) => Promise<void>;
   initialize: () => void;
 }
 
@@ -174,7 +174,7 @@ export const useAssetStore = create<AssetState>()((set, get) => ({
     }
   },
 
-  uploadFiles: async (files, category) => {
+  uploadFiles: async (files, category, garmentCategory = "tops") => {
     set({ isUploading: true });
     const userId = getUserId();
     const now = new Date().toISOString();
@@ -207,7 +207,7 @@ export const useAssetStore = create<AssetState>()((set, get) => ({
             name: assetName,
             thumbnailUrl: objectUrl,
             originalUrl: objectUrl,
-            category: "tops",
+            category: garmentCategory,
             createdAt: now,
           });
         }
@@ -239,7 +239,7 @@ export const useAssetStore = create<AssetState>()((set, get) => ({
             name: assetName,
             image_url: publicUrl,
             thumbnail_url: publicUrl,
-            category: "tops",
+            category: garmentCategory,
           })
           .select()
           .single();

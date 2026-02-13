@@ -45,6 +45,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ModelAsset, GarmentAsset, ReferenceAsset } from "@/types";
 
 type AnyAsset = ModelAsset | GarmentAsset | ReferenceAsset;
@@ -295,6 +296,7 @@ export function AssetLibraryPage() {
     initialize();
   }, [initialize]);
 
+  const [garmentCategory, setGarmentCategory] = useState<GarmentAsset["category"]>("tops");
   const [renameDialog, setRenameDialog] = useState<{
     id: string;
     name: string;
@@ -317,10 +319,10 @@ export function AssetLibraryPage() {
 
   const handleUpload = useCallback(
     async (files: File[]) => {
-      await uploadFiles(files, activeCategory);
+      await uploadFiles(files, activeCategory, activeCategory === "garments" ? garmentCategory : undefined);
       toast.success(`${files.length} file${files.length > 1 ? "s" : ""} uploaded`);
     },
-    [uploadFiles, activeCategory]
+    [uploadFiles, activeCategory, garmentCategory]
   );
 
   const openRename = (id: string, name: string) => {
@@ -468,7 +470,21 @@ export function AssetLibraryPage() {
 
         {/* Upload zone - garments and references only */}
         {activeCategory !== "models" && (
-          <div className="mt-4">
+          <div className="mt-4 space-y-3">
+            {activeCategory === "garments" && (
+              <Select value={garmentCategory} onValueChange={(v) => setGarmentCategory(v as GarmentAsset["category"])}>
+                <SelectTrigger className="h-9 w-48">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tops">Tops</SelectItem>
+                  <SelectItem value="outerwear">Outerwear</SelectItem>
+                  <SelectItem value="bottoms">Bottoms</SelectItem>
+                  <SelectItem value="dresses">Dresses</SelectItem>
+                  <SelectItem value="accessories">Accessories</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <UploadZone
               category={activeCategory}
               onUpload={handleUpload}

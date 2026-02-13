@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useAuthStore } from './authStore';
 
+vi.mock('./galleryStore', () => ({
+  useGalleryStore: { getState: vi.fn().mockReturnValue({ initialize: vi.fn() }) },
+}));
+
 // Mock Supabase auth methods
 vi.mock('@/lib/supabase', () => ({
   supabase: {
