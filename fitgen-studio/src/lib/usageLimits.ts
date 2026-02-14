@@ -19,6 +19,8 @@ export function hasCreditsRemaining(tier: Tier, usedThisMonth: number): boolean 
 }
 
 export function getRemainingCredits(tier: Tier, usedThisMonth: number): number {
+  // TODO: Remove bypass when done testing
+  if (import.meta.env.VITE_BYPASS_CREDITS === "true") return Infinity;
   const limit = TIER_LIMITS[tier];
   if (limit === Infinity) return Infinity;
   return Math.max(0, limit - usedThisMonth);
