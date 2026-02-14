@@ -20,6 +20,8 @@ export interface StudioState {
   references: ReferenceAsset[];
   addReference: (ref: ReferenceAsset) => void;
   removeReference: (id: string) => void;
+  selectedReferenceId: string | null;
+  selectReference: (id: string | null) => void;
 
   // Right panel - model generation
   presetType: "lovely" | "chic" | "sporty" | "street" | null;
@@ -97,6 +99,8 @@ export const useStudioStore = create<StudioState>()((set) => ({
     set((state) => ({ references: [...state.references, ref] })),
   removeReference: (id) =>
     set((state) => ({ references: state.references.filter((r) => r.id !== id) })),
+  selectedReferenceId: null,
+  selectReference: (id) => set({ selectedReferenceId: id }),
 
   // Right panel
   presetType: null,

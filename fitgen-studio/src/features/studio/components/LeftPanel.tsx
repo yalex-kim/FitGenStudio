@@ -19,6 +19,8 @@ export function LeftPanel() {
     selectGarment,
     selectedModelId,
     selectModel,
+    selectedReferenceId,
+    selectReference,
   } = useStudioStore();
 
   // Read assets from assetStore (Supabase-backed)
@@ -33,7 +35,8 @@ export function LeftPanel() {
   // Resolve selected assets for the selection summary bar
   const selectedGarment = garments.find((g) => g.id === selectedGarmentId) ?? null;
   const selectedModel = models.find((m) => m.id === selectedModelId) ?? null;
-  const hasSelection = !!(selectedGarment || selectedModel);
+  const selectedReference = references.find((r) => r.id === selectedReferenceId) ?? null;
+  const hasSelection = !!(selectedGarment || selectedModel || selectedReference);
 
   const handleGarmentUpload = (files: File[]) => {
     uploadFiles(files, "garments", garmentCategory);
@@ -65,9 +68,12 @@ export function LeftPanel() {
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
             )}
           </TabsTrigger>
-          <TabsTrigger value="reference" className="gap-1 text-xs">
+          <TabsTrigger value="reference" className="relative gap-1 text-xs">
             <Palette className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Reference</span>
+            {selectedReference && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -205,18 +211,35 @@ export function LeftPanel() {
                   {references.map((ref) => (
                     <div
                       key={ref.id}
-                      className="group relative overflow-hidden rounded-lg border"
+                      className={cn(
+                        "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-colors",
+                        selectedReferenceId === ref.id
+                          ? "border-primary ring-2 ring-primary/20"
+                          : "border-transparent hover:border-muted-foreground/25"
+                      )}
+                      onClick={() =>
+                        selectReference(selectedReferenceId === ref.id ? null : ref.id)
+                      }
                     >
                       <img
                         src={ref.thumbnailUrl}
                         alt={ref.name}
                         className="aspect-square w-full object-cover"
                       />
+                      {selectedReferenceId === ref.id && (
+                        <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <Check className="h-3 w-3" />
+                        </div>
+                      )}
                       <Button
                         variant="destructive"
                         size="icon"
                         className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
-                        onClick={() => removeAssets([ref.id])}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (selectedReferenceId === ref.id) selectReference(null);
+                          removeAssets([ref.id]);
+                        }}
                       >
                         <X className="h-3 w-3" />
                       </Button>
@@ -331,6 +354,40 @@ export function LeftPanel() {
               )}
             </div>
           </div>
+
+          {/* Selected reference */}
+          {selectedReference && (
+            <div
+              className="mt-1.5 flex items-center gap-2 rounded-md border border-primary/50 bg-primary/5 p-1.5 cursor-pointer"
+              onClick={() => setLeftTab("reference")}
+            >
+              <img
+                src={selectedReference.thumbnailUrl}
+                alt={selectedReference.name}
+                className="h-8 w-8 shrink-0 rounded object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[10px] font-medium">
+                  {selectedReference.name}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  <Palette className="mr-0.5 inline h-2.5 w-2.5" />
+                  Reference
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectReference(null);
+                }}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
