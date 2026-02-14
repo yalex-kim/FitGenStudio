@@ -4,6 +4,8 @@ import { GoogleGenAI } from '@google/genai';
 interface VariationRequestBody {
   modelImageBase64: string;
   modelMimeType?: string;
+  referenceImageBase64?: string;
+  referenceMimeType?: string;
   pose: string;
   background: string;
   lighting: string;
@@ -48,6 +50,14 @@ function validateBody(body: unknown): { valid: true; data: VariationRequestBody 
   if (b.background === 'custom' && (!b.customBackground || typeof b.customBackground !== 'string')) {
     return { valid: false, error: 'customBackground is required when background is "custom".' };
   }
+  if (b.referenceImageBase64 && typeof b.referenceImageBase64 === 'string') {
+    if ((b.referenceImageBase64 as string).length > MAX_BASE64_SIZE) {
+      return { valid: false, error: 'Reference image exceeds 20MB limit.' };
+    }
+  }
+  if (b.referenceMimeType && !VALID_MIME_TYPES.includes(b.referenceMimeType as string)) {
+    return { valid: false, error: `Invalid referenceMimeType. Must be one of: ${VALID_MIME_TYPES.join(', ')}` };
+  }
 
   return { valid: true, data: body as VariationRequestBody };
 }
@@ -90,13 +100,29 @@ function buildVariationInstruction(data: VariationRequestBody): string {
     ? data.customBackground
     : BG_DESC[data.background] || '';
 
-  return [
-    'Generate a pose/background variation of the model in the provided image.',
+  const hasReference = !!data.referenceImageBase64;
+
+  const lines = [
+    hasReference
+      ? 'Generate a variation of the model (first image) matching the mood, pose, and atmosphere of the reference image (second image).'
+      : 'Generate a pose/background variation of the model in the provided image.',
     '',
     'REQUIREMENTS:',
     '- SAME person: identical face, skin tone, hair, body proportions.',
     '- Keep the same clothing/outfit.',
-    '- Only change pose, background, and lighting as specified.',
+  ];
+
+  if (hasReference) {
+    lines.push(
+      '- Match the reference image\'s overall mood, camera angle, composition, and atmosphere.',
+      '- Adapt the background and lighting to resemble the reference.',
+      '- The pose should closely follow the reference while keeping the model natural.',
+    );
+  } else {
+    lines.push('- Only change pose, background, and lighting as specified.');
+  }
+
+  lines.push(
     '- Result should look like a real photograph from the same session.',
     '',
     `New Pose: ${POSE_DESC[data.pose]}`,
@@ -104,10 +130,18 @@ function buildVariationInstruction(data: VariationRequestBody): string {
     `Lighting: ${LIGHT_DESC[data.lighting]}`,
     '',
     'Output: photorealistic high-resolution fashion lookbook photo, ultra sharp, professional color grading.',
-  ].join('\n');
+  );
+
+  return lines.join('\n');
 }
 
-async function callGeminiVariation(instruction: string, modelImg: string, modelMime: string) {
+async function callGeminiVariation(
+  instruction: string,
+  modelImg: string,
+  modelMime: string,
+  refImg?: string,
+  refMime?: string,
+) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
 
@@ -119,21 +153,26 @@ async function callGeminiVariation(instruction: string, modelImg: string, modelM
     }
 
     try {
+      const inputParts: Array<Record<string, unknown>> = [
+        { text: instruction },
+        { inlineData: { mimeType: modelMime, data: modelImg } },
+      ];
+      if (refImg) {
+        inputParts.push({ inlineData: { mimeType: refMime || 'image/jpeg', data: refImg } });
+      }
+
       const response = await client.models.generateContent({
         model: GEMINI_MODEL,
         contents: [{
           role: 'user',
-          parts: [
-            { text: instruction },
-            { inlineData: { mimeType: modelMime, data: modelImg } },
-          ],
+          parts: inputParts,
         }],
       });
 
-      const parts = response.candidates?.[0]?.content?.parts;
-      if (!parts) continue;
+      const responseParts = response.candidates?.[0]?.content?.parts;
+      if (!responseParts) continue;
 
-      for (const part of parts) {
+      for (const part of responseParts) {
         if (part.inlineData && part.inlineData.data) {
           return {
             imageBase64: part.inlineData.data,
@@ -210,7 +249,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const instruction = buildVariationInstruction(data);
     const modelMime = data.modelMimeType || 'image/png';
 
-    const result = await callGeminiVariation(instruction, data.modelImageBase64, modelMime);
+    const result = await callGeminiVariation(
+      instruction,
+      data.modelImageBase64,
+      modelMime,
+      data.referenceImageBase64,
+      data.referenceMimeType,
+    );
 
     return res.status(200).json({
       success: true,

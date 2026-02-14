@@ -39,6 +39,7 @@ import {
   ArrowRightLeft,
   Shirt,
   User,
+  Camera,
 } from "lucide-react";
 
 const STYLE_PRESETS = [
@@ -171,18 +172,25 @@ export function RightPanel() {
   const isLow = !isUnlimited && remaining > 0 && remaining <= Math.ceil(limit * 0.1);
   const isExhausted = !isUnlimited && remaining === 0;
 
-  // Determine swap mode: garment selected AND a model image available
+  // Read references and selected reference from stores
+  const references = useAssetStore((s) => s.references);
+  const selectedReferenceId = useStudioStore((s) => s.selectedReferenceId);
+
+  // Determine mode: model+garment = Swap, model-only = Variation, else = Model Generation
   const selectedGarment = garments.find((g) => g.id === selectedGarmentId);
   const selectedModel = models.find((m) => m.id === selectedModelId);
+  const selectedReference = references.find((r) => r.id === selectedReferenceId);
   const selectedGeneratedImage =
     selectedImageIndex !== null ? generatedImages[selectedImageIndex] : null;
 
   // A model image is available from either a saved model or a selected generated image
   const hasModelImage = !!(selectedModel || selectedGeneratedImage);
   const isSwapMode = !!(selectedGarmentId && hasModelImage);
+  const isVariationMode = !!(hasModelImage && !selectedGarmentId);
+  const isReferenceVariation = !!(isVariationMode && selectedReference);
 
   const canClickGenerate =
-    (isSwapMode || selectedGarmentId || presetType) && !isGenerating && !isSwapping && !isExhausted;
+    (isSwapMode || isVariationMode || selectedGarmentId || presetType) && !isGenerating && !isSwapping && !isExhausted;
 
   const mapBodyType = (bt: string) => (bt === "plus" ? "plus-size" : bt);
   const mapBackground = (bg: string): string => {
@@ -369,9 +377,106 @@ export function RightPanel() {
     }
   };
 
+  const executeVariation = async () => {
+    const modelImageUrl = selectedModel?.imageUrl ?? selectedGeneratedImage?.url;
+    if (!modelImageUrl) return;
+
+    setIsGenerating(true);
+    setGenerationError(null);
+    setGenerationProgress(0);
+    recordUsage();
+
+    try {
+      setGenerationProgress(10);
+
+      // Compress model image; optionally compress reference image
+      const imagePromises: Promise<{ base64: string; mimeType: string }>[] = [
+        imageUrlToBase64(modelImageUrl),
+      ];
+      if (selectedReference) {
+        imagePromises.push(imageUrlToBase64(selectedReference.originalUrl));
+      }
+      const imageResults = await Promise.all(imagePromises);
+      const modelData = imageResults[0];
+      const refData = imageResults[1]; // undefined if no reference
+
+      setGenerationProgress(20);
+
+      const variationBody: Record<string, unknown> = {
+        modelImageBase64: modelData.base64,
+        modelMimeType: modelData.mimeType,
+        pose: mapPose(posePreset),
+        background: mapBackground(backgroundPreset),
+        lighting: lightingPreset,
+      };
+      if (refData) {
+        variationBody.referenceImageBase64 = refData.base64;
+        variationBody.referenceMimeType = refData.mimeType;
+      }
+
+      // Generate 4 variations in parallel
+      const promises = Array.from({ length: 4 }, () =>
+        fetch("/api/generate/variation", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-id": user?.id || "anonymous",
+            "x-user-tier": tier,
+          },
+          body: JSON.stringify(variationBody),
+        }).then(async (res) => {
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: "Variation failed" }));
+            throw new Error(err.error || `HTTP ${res.status}`);
+          }
+          return res.json();
+        })
+      );
+
+      setGenerationProgress(30);
+
+      const results = await Promise.allSettled(promises);
+      setGenerationProgress(90);
+
+      const images = results
+        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
+        .map((r) => ({
+          id: crypto.randomUUID(),
+          url: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
+          thumbnailUrl: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
+          prompt: r.value.data.promptUsed || "",
+          modelId: selectedModelId || selectedGeneratedImage?.id || "",
+          garmentId: undefined,
+          createdAt: new Date().toISOString(),
+          status: "completed" as const,
+        }));
+
+      setGenerationProgress(100);
+
+      if (images.length === 0) {
+        const firstError = results.find(
+          (r): r is PromiseRejectedResult => r.status === "rejected"
+        );
+        throw new Error(firstError?.reason?.message || "All variations failed");
+      }
+
+      setGeneratedImages(images);
+      useGalleryStore.getState().addImages(images);
+      toast.success(`${images.length} variation${images.length > 1 ? "s" : ""} generated!`);
+    } catch (err: any) {
+      const errorMsg = err?.message || "Variation failed. Please try again.";
+      setGenerationError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const runGeneration = async () => {
     if (isSwapMode) {
       await executeSwap();
+    } else if (isVariationMode) {
+      await executeVariation();
     } else {
       await executeGeneration();
     }
@@ -595,6 +700,16 @@ export function RightPanel() {
               <ArrowRightLeft className="h-3 w-3" />
               Lookbook Mode (Model + Garment)
             </Badge>
+          ) : isReferenceVariation ? (
+            <Badge variant="default" className="gap-1 text-[10px]">
+              <Camera className="h-3 w-3" />
+              Reference Variation (Model + Reference)
+            </Badge>
+          ) : isVariationMode ? (
+            <Badge variant="default" className="gap-1 text-[10px]">
+              <Camera className="h-3 w-3" />
+              Variation Mode (Pose / Angle)
+            </Badge>
           ) : selectedGarmentId ? (
             <Badge variant="outline" className="gap-1 text-[10px]">
               <Shirt className="h-3 w-3" />
@@ -618,7 +733,7 @@ export function RightPanel() {
         )}
         {!canClickGenerate && !isGenerating && !isSwapping && !isExhausted && (
           <p className="mb-2 text-center text-[10px] text-muted-foreground">
-            Select a style preset or upload a garment to generate
+            Select a style preset, a model, or upload a garment
           </p>
         )}
         <Button
@@ -631,12 +746,17 @@ export function RightPanel() {
           {isGenerating || isSwapping ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {isSwapping ? "Swapping Garment..." : "Generating..."}
+              {isSwapping ? "Swapping Garment..." : isVariationMode ? "Generating Variations..." : "Generating..."}
             </>
           ) : isSwapMode ? (
             <>
               <ArrowRightLeft className="mr-2 h-4 w-4" />
               Swap Garment onto Model
+            </>
+          ) : isVariationMode ? (
+            <>
+              <Camera className="mr-2 h-4 w-4" />
+              Generate Variation
             </>
           ) : (
             <>
