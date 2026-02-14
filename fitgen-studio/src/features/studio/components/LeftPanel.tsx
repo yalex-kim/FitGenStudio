@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UploadDropzone } from "./UploadDropzone";
-import { Shirt, Users, Palette, X } from "lucide-react";
+import { Shirt, Users, Palette, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StudioLeftTab } from "@/stores/studioStore";
@@ -30,6 +30,11 @@ export function LeftPanel() {
 
   const [garmentCategory, setGarmentCategory] = useState<GarmentAsset["category"]>("tops");
 
+  // Resolve selected assets for the selection summary bar
+  const selectedGarment = garments.find((g) => g.id === selectedGarmentId) ?? null;
+  const selectedModel = models.find((m) => m.id === selectedModelId) ?? null;
+  const hasSelection = !!(selectedGarment || selectedModel);
+
   const handleGarmentUpload = (files: File[]) => {
     uploadFiles(files, "garments", garmentCategory);
   };
@@ -43,16 +48,22 @@ export function LeftPanel() {
       <Tabs
         value={leftTab}
         onValueChange={(v) => setLeftTab(v as StudioLeftTab)}
-        className="flex flex-1 flex-col"
+        className="flex flex-1 flex-col overflow-hidden"
       >
         <TabsList className="mx-3 mt-3 grid w-auto grid-cols-3">
-          <TabsTrigger value="product" className="gap-1 text-xs">
+          <TabsTrigger value="product" className="relative gap-1 text-xs">
             <Shirt className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Product</span>
+            {selectedGarment && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
+            )}
           </TabsTrigger>
-          <TabsTrigger value="models" className="gap-1 text-xs">
+          <TabsTrigger value="models" className="relative gap-1 text-xs">
             <Users className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Models</span>
+            {selectedModel && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
+            )}
           </TabsTrigger>
           <TabsTrigger value="reference" className="gap-1 text-xs">
             <Palette className="h-3.5 w-3.5" />
@@ -87,22 +98,30 @@ export function LeftPanel() {
                       className={cn(
                         "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-colors",
                         selectedGarmentId === garment.id
-                          ? "border-primary"
+                          ? "border-primary ring-2 ring-primary/20"
                           : "border-transparent hover:border-muted-foreground/25"
                       )}
-                      onClick={() => selectGarment(garment.id)}
+                      onClick={() =>
+                        selectGarment(selectedGarmentId === garment.id ? null : garment.id)
+                      }
                     >
                       <img
                         src={garment.thumbnailUrl}
                         alt={garment.name}
                         className="aspect-square w-full object-cover"
                       />
+                      {selectedGarmentId === garment.id && (
+                        <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <Check className="h-3 w-3" />
+                        </div>
+                      )}
                       <Button
                         variant="destructive"
                         size="icon"
                         className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (selectedGarmentId === garment.id) selectGarment(null);
                           removeAssets([garment.id]);
                         }}
                       >
@@ -136,22 +155,30 @@ export function LeftPanel() {
                       className={cn(
                         "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-colors",
                         selectedModelId === model.id
-                          ? "border-primary"
+                          ? "border-primary ring-2 ring-primary/20"
                           : "border-transparent hover:border-muted-foreground/25"
                       )}
-                      onClick={() => selectModel(model.id)}
+                      onClick={() =>
+                        selectModel(selectedModelId === model.id ? null : model.id)
+                      }
                     >
                       <img
                         src={model.thumbnailUrl}
                         alt={model.name}
                         className="aspect-[3/4] w-full object-cover"
                       />
+                      {selectedModelId === model.id && (
+                        <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <Check className="h-3 w-3" />
+                        </div>
+                      )}
                       <Button
                         variant="destructive"
                         size="icon"
                         className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (selectedModelId === model.id) selectModel(null);
                           removeAssets([model.id]);
                         }}
                       >
@@ -202,6 +229,110 @@ export function LeftPanel() {
           </ScrollArea>
         </TabsContent>
       </Tabs>
+
+      {/* Selection summary bar — always visible at bottom */}
+      {hasSelection && (
+        <div className="shrink-0 border-t border-border bg-muted/50 px-3 py-2">
+          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Selected
+          </p>
+          <div className="flex items-center gap-2">
+            {/* Selected garment */}
+            <div
+              className={cn(
+                "flex flex-1 items-center gap-2 rounded-md border p-1.5 transition-colors",
+                selectedGarment
+                  ? "border-primary/50 bg-primary/5 cursor-pointer"
+                  : "border-dashed border-muted-foreground/25"
+              )}
+              onClick={() => {
+                if (selectedGarment) setLeftTab("product");
+              }}
+            >
+              {selectedGarment ? (
+                <>
+                  <img
+                    src={selectedGarment.thumbnailUrl}
+                    alt={selectedGarment.name}
+                    className="h-8 w-8 shrink-0 rounded object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[10px] font-medium">
+                      {selectedGarment.name}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      <Shirt className="mr-0.5 inline h-2.5 w-2.5" />
+                      Product
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selectGarment(null);
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </>
+              ) : (
+                <p className="w-full text-center text-[10px] text-muted-foreground">
+                  No product
+                </p>
+              )}
+            </div>
+
+            {/* Selected model */}
+            <div
+              className={cn(
+                "flex flex-1 items-center gap-2 rounded-md border p-1.5 transition-colors",
+                selectedModel
+                  ? "border-primary/50 bg-primary/5 cursor-pointer"
+                  : "border-dashed border-muted-foreground/25"
+              )}
+              onClick={() => {
+                if (selectedModel) setLeftTab("models");
+              }}
+            >
+              {selectedModel ? (
+                <>
+                  <img
+                    src={selectedModel.thumbnailUrl}
+                    alt={selectedModel.name}
+                    className="h-8 w-8 shrink-0 rounded object-cover"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[10px] font-medium">
+                      {selectedModel.name}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      <Users className="mr-0.5 inline h-2.5 w-2.5" />
+                      Model
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      selectModel(null);
+                    }}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </>
+              ) : (
+                <p className="w-full text-center text-[10px] text-muted-foreground">
+                  No model
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

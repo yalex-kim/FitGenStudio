@@ -1,6 +1,7 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { useStudioStore } from "@/stores/studioStore";
+import { useAssetStore } from "@/stores/assetStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useUsageStore } from "@/stores/usageStore";
 import { useGalleryStore } from "@/stores/galleryStore";
@@ -113,8 +114,6 @@ export function RightPanel() {
     setPosePreset,
     selectedGarmentId,
     selectedModelId,
-    garments,
-    models,
     generatedImages,
     selectedImageIndex,
     isGenerating,
@@ -127,6 +126,10 @@ export function RightPanel() {
     setSwapResults,
     setSwapError,
   } = useStudioStore();
+
+  // Read asset data from assetStore (Supabase-backed)
+  const garments = useAssetStore((s) => s.garments);
+  const models = useAssetStore((s) => s.models);
 
   const { user } = useAuthStore();
   const { canGenerate: hasCredits, getRemaining, getLimit, recordUsage } = useUsageStore();

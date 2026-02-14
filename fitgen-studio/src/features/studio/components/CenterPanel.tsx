@@ -455,7 +455,7 @@ export function CenterPanel() {
   // ---- Compare view ----
   if (viewMode === "compare" && selectedImageIndex !== null) {
     const image = generatedImages[selectedImageIndex];
-    const garments = useStudioStore.getState().garments;
+    const garments = useAssetStore.getState().garments;
     const garment = image?.garmentId
       ? garments.find((g) => g.id === image.garmentId)
       : null;
