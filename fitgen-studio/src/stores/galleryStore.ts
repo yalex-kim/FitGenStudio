@@ -32,6 +32,7 @@ export interface GalleryState {
 
   // Actions
   addImages: (images: GeneratedImage[]) => void;
+  updateImage: (id: string, updates: Partial<GeneratedImage>) => void;
   deleteImages: (ids: string[]) => void;
   initialize: () => void;
 }
@@ -102,6 +103,14 @@ export const useGalleryStore = create<GalleryState>()((set) => ({
   detailImageId: null,
   openDetail: (id) => set({ detailImageId: id }),
   closeDetail: () => set({ detailImageId: null }),
+
+  updateImage: (id, updates) => {
+    set((state) => ({
+      images: state.images.map((img) =>
+        img.id === id ? { ...img, ...updates } : img
+      ),
+    }));
+  },
 
   addImages: (images) => {
     set((state) => ({

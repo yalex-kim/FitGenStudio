@@ -15,5 +15,8 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: false,
+    env: {
+      VITE_BYPASS_CREDITS: 'false',
+    },
   },
 })

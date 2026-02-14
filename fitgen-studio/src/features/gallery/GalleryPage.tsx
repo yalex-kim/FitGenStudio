@@ -23,13 +23,15 @@ import {
 } from "@/components/ui/select";
 import toast from "react-hot-toast";
 import { useAuthStore } from "@/stores/authStore";
+import { useAssetStore } from "@/stores/assetStore";
+import { useStudioStore } from "@/stores/studioStore";
 import { downloadWithWatermark } from "@/lib/watermark";
 import { cn } from "@/lib/utils";
 import {
   Search,
   Download,
   Trash2,
-  Paintbrush,
+  Palette,
   Image,
   Calendar,
   ArrowUpFromLine,
@@ -37,6 +39,7 @@ import {
   X,
   SlidersHorizontal,
   ImageOff,
+  Loader2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -186,6 +189,81 @@ export function GalleryPage() {
       );
     },
     [deleteImages]
+  );
+
+  const [upscalingId, setUpscalingId] = useState<string | null>(null);
+
+  const handleUseAsReference = useCallback(
+    (image: { id: string; url: string; thumbnailUrl: string; prompt: string; createdAt: string }) => {
+      const refAsset = {
+        id: `r-${image.id}`,
+        name: image.prompt || "Gallery Reference",
+        thumbnailUrl: image.thumbnailUrl,
+        originalUrl: image.url,
+        createdAt: image.createdAt,
+      };
+      useAssetStore.getState().addReference(refAsset);
+      useStudioStore.getState().addReference(refAsset);
+      useStudioStore.getState().selectReference(refAsset.id);
+      toast.success("Added as reference");
+      navigate("/studio");
+    },
+    [navigate]
+  );
+
+  const handleUpscale = useCallback(
+    async (image: { id: string; url: string }) => {
+      if (!image.url || upscalingId) return;
+      setUpscalingId(image.id);
+      try {
+        // Convert image URL to base64
+        const img = document.createElement("img");
+        img.crossOrigin = "anonymous";
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("Failed to load image"));
+          img.src = image.url;
+        });
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+        const base64 = dataUrl.split(",")[1];
+
+        const user = useAuthStore.getState().user;
+        const resp = await fetch("/api/upscale", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-id": user?.id ?? "anonymous",
+            "x-user-tier": user?.tier ?? "free",
+          },
+          body: JSON.stringify({ imageBase64: base64, mimeType: "image/jpeg" }),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.error || "Upscale failed");
+        }
+
+        const result = await resp.json();
+        const upscaledUrl = `data:${result.data.mimeType};base64,${result.data.imageBase64}`;
+
+        // Update image in gallery store
+        useGalleryStore.getState().updateImage(image.id, {
+          url: upscaledUrl,
+          thumbnailUrl: upscaledUrl,
+        });
+        toast.success("Image upscaled to 4K!");
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Upscale failed");
+      } finally {
+        setUpscalingId(null);
+      }
+    },
+    [upscalingId]
   );
 
   const formatDate = (dateStr: string) => {
@@ -407,12 +485,13 @@ export function GalleryPage() {
                               size="icon"
                               variant="ghost"
                               className="h-7 w-7 text-white hover:bg-white/20"
+                              title="Use as Reference"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate("/studio");
+                                handleUseAsReference(item);
                               }}
                             >
-                              <Paintbrush className="h-3.5 w-3.5" />
+                              <Palette className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         </div>
@@ -507,19 +586,27 @@ export function GalleryPage() {
                   <Download className="mr-2 h-4 w-4" />
                   Download
                 </Button>
-                <Button variant="outline">
-                  <ArrowUpFromLine className="mr-2 h-4 w-4" />
-                  Upscale to 4K
+                <Button
+                  variant="outline"
+                  disabled={upscalingId === detailImage.id}
+                  onClick={() => handleUpscale(detailImage)}
+                >
+                  {upscalingId === detailImage.id ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUpFromLine className="mr-2 h-4 w-4" />
+                  )}
+                  {upscalingId === detailImage.id ? "Upscaling..." : "Upscale to 4K"}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => {
+                    handleUseAsReference(detailImage);
                     closeDetail();
-                    navigate("/studio");
                   }}
                 >
-                  <Paintbrush className="mr-2 h-4 w-4" />
-                  Re-edit
+                  <Palette className="mr-2 h-4 w-4" />
+                  Use as Reference
                 </Button>
                 <Button
                   variant="destructive"

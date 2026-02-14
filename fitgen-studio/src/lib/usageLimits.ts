@@ -12,6 +12,8 @@ export function getMonthlyLimit(tier: Tier): number {
 }
 
 export function hasCreditsRemaining(tier: Tier, usedThisMonth: number): boolean {
+  // TODO: Remove bypass when done testing
+  if (import.meta.env.VITE_BYPASS_CREDITS === "true") return true;
   const limit = TIER_LIMITS[tier];
   return usedThisMonth < limit;
 }

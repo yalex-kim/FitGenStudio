@@ -67,6 +67,12 @@ export interface StudioState {
   compareImageId: string | null;
   setCompareImageId: (id: string | null) => void;
 
+  // Upscale / Fine-tune
+  isUpscaling: boolean;
+  setIsUpscaling: (v: boolean) => void;
+  isEditing: boolean;
+  setIsEditing: (v: boolean) => void;
+
   // Swap mode
   swapResults: GeneratedImage[];
   setSwapResults: (images: GeneratedImage[]) => void;
@@ -154,6 +160,12 @@ export const useStudioStore = create<StudioState>()((set) => ({
     }),
   compareImageId: null,
   setCompareImageId: (id) => set({ compareImageId: id }),
+
+  // Upscale / Fine-tune
+  isUpscaling: false,
+  setIsUpscaling: (v) => set({ isUpscaling: v }),
+  isEditing: false,
+  setIsEditing: (v) => set({ isEditing: v }),
 
   // Swap mode
   swapResults: [],
