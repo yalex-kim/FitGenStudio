@@ -77,7 +77,13 @@ function validateBody(body: unknown): { valid: true; data: ModelRequestBody } | 
 
 const GEMINI_MODEL = 'gemini-3-pro-image-preview';
 
-async function callGemini(prompt: string) {
+function getAspectRatio(framing?: string): string {
+  if (framing === 'upper-body' || framing === 'close-up') return '1:1';
+  // full-body, three-quarter-body, or default → portrait
+  return '3:4';
+}
+
+async function callGemini(prompt: string, framing?: string) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
 
@@ -88,7 +94,7 @@ async function callGemini(prompt: string) {
     contents: prompt,
     config: {
       imageConfig: {
-        aspectRatio: '1:1' as const,
+        aspectRatio: getAspectRatio(framing) as '1:1',
         imageSize: '1K' as const,
       },
     },
@@ -246,7 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const prompt = buildPrompt(validation.data);
-    const result = await callGemini(prompt);
+    const result = await callGemini(prompt, validation.data.framing);
 
     return res.status(200).json({
       success: true,

@@ -172,10 +172,16 @@ function buildVariationInstruction(data: VariationRequestBody): string {
   return lines.join('\n');
 }
 
+function getAspectRatio(framing?: string): string {
+  if (framing === 'upper-body' || framing === 'close-up') return '1:1';
+  return '3:4';
+}
+
 async function callGeminiVariation(
   instruction: string,
   modelImg: string,
   modelMime: string,
+  framing?: string,
   refImg?: string,
   refMime?: string,
 ) {
@@ -204,6 +210,12 @@ async function callGeminiVariation(
           role: 'user',
           parts: inputParts,
         }],
+        config: {
+          imageConfig: {
+            aspectRatio: getAspectRatio(framing) as '1:1',
+            imageSize: '1K' as const,
+          },
+        },
       });
 
       const responseParts = response.candidates?.[0]?.content?.parts;
@@ -290,6 +302,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       instruction,
       data.modelImageBase64,
       modelMime,
+      data.framing,
       data.referenceImageBase64,
       data.referenceMimeType,
     );
