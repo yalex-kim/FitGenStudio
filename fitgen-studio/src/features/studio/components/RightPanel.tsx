@@ -68,24 +68,53 @@ const POSE_PRESETS = [
   { id: "dynamic", label: "Dynamic" },
 ];
 
-/** Convert an image URL (blob: or data:) to { base64, mimeType }. */
-async function imageUrlToBase64(url: string): Promise<{ base64: string; mimeType: string }> {
-  // Already a data URL — extract parts directly
-  if (url.startsWith("data:")) {
-    const match = url.match(/^data:([^;]+);base64,(.+)$/);
-    if (match) return { mimeType: match[1], base64: match[2] };
+/**
+ * Load an image URL into an HTMLImageElement.
+ * Works with blob:, data:, and https: URLs.
+ */
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to load image"));
+    img.src = url;
+  });
+}
+
+/**
+ * Convert an image URL to a compressed base64 string.
+ * Resizes to fit within maxDim (longest side) and compresses as JPEG
+ * to stay well under Vercel's 4.5MB body limit.
+ */
+const MAX_DIM = 1024;
+const JPEG_QUALITY = 0.8;
+
+async function imageUrlToBase64(
+  url: string,
+  maxDim = MAX_DIM,
+  quality = JPEG_QUALITY,
+): Promise<{ base64: string; mimeType: string }> {
+  const img = await loadImage(url);
+
+  // Calculate scaled dimensions
+  let { naturalWidth: w, naturalHeight: h } = img;
+  if (w > maxDim || h > maxDim) {
+    const scale = maxDim / Math.max(w, h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
   }
-  // Blob URL or other — fetch and convert
-  const res = await fetch(url);
-  const blob = await res.blob();
-  const mimeType = blob.type || "image/png";
-  const arrayBuffer = await blob.arrayBuffer();
-  const bytes = new Uint8Array(arrayBuffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return { base64: btoa(binary), mimeType };
+
+  // Draw to canvas and export as JPEG
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(img, 0, 0, w, h);
+
+  const dataUrl = canvas.toDataURL("image/jpeg", quality);
+  const base64 = dataUrl.split(",")[1];
+  return { base64, mimeType: "image/jpeg" };
 }
 
 export function RightPanel() {
