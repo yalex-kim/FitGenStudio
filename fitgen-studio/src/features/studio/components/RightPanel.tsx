@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { uploadBase64ToStorage } from "@/lib/storageUpload";
 import { cn } from "@/lib/utils";
+import type { StudioStep } from "@/stores/studioStore";
 import {
   Sparkles,
   Heart,
@@ -41,6 +42,10 @@ import {
   Shirt,
   User,
   Camera,
+  UserRound,
+  Clapperboard,
+  SlidersHorizontal,
+  ArrowUpFromLine,
 } from "lucide-react";
 
 const STYLE_PRESETS = [
@@ -208,11 +213,6 @@ export function RightPanel() {
   const hasModelImage = !!(selectedModel || selectedGeneratedImage);
   const isSwapMode = !!(selectedGarmentId && hasModelImage);
   const isVariationMode = !!(hasModelImage && !selectedGarmentId);
-  const isReferenceVariation = !!(isVariationMode && selectedReference);
-
-  const canClickGenerate =
-    (isSwapMode || isVariationMode || selectedGarmentId || presetType) && !isGenerating && !isSwapping && !isExhausted;
-
   const mapBodyType = (bt: string) => (bt === "plus" ? "plus-size" : bt);
   const mapBackground = (bg: string): string => {
     const bgMap: Record<string, string> = {
@@ -507,17 +507,49 @@ export function RightPanel() {
     }
   };
 
-  const runGeneration = async () => {
-    if (isSwapMode) {
-      await executeSwap();
-    } else if (isVariationMode) {
-      await executeVariation();
-    } else {
-      await executeGeneration();
+
+  const studioStep = useStudioStore((s) => s.studioStep);
+  const setStudioStep = useStudioStore((s) => s.setStudioStep);
+
+  const STEPS: { id: StudioStep; label: string; icon: typeof UserRound }[] = [
+    { id: "model", label: "Model", icon: UserRound },
+    { id: "scene", label: "Scene", icon: Clapperboard },
+    { id: "tryon", label: "Try-On", icon: Shirt },
+    { id: "finetune", label: "Fine Tune", icon: SlidersHorizontal },
+  ];
+
+  // --- Step-specific button labels & logic ---
+  const getStepButtonProps = () => {
+    if (isGenerating || isSwapping) {
+      return {
+        label: isSwapping ? "Swapping Garment..." : studioStep === "scene" ? "Generating Scene..." : "Generating...",
+        icon: Loader2,
+        spinning: true,
+      };
+    }
+    switch (studioStep) {
+      case "model":
+        return { label: "Generate Model", icon: Wand2, spinning: false };
+      case "scene":
+        return { label: isVariationMode ? "Generate Variation" : "Generate Scene", icon: Camera, spinning: false };
+      case "tryon":
+        return { label: "Try On Garment", icon: ArrowRightLeft, spinning: false };
+      default:
+        return null; // finetune has no generate button
     }
   };
 
-  const handleGenerate = async () => {
+  const canClickStep = () => {
+    if (isGenerating || isSwapping || isExhausted) return false;
+    switch (studioStep) {
+      case "model": return !!presetType;
+      case "scene": return hasModelImage;
+      case "tryon": return isSwapMode;
+      default: return false;
+    }
+  };
+
+  const handleStepGenerate = async () => {
     if (!hasCredits(tier)) {
       toast.error("You have used all your generation credits for this month.");
       return;
@@ -526,328 +558,451 @@ export function RightPanel() {
       setShowLowCreditDialog(true);
       return;
     }
-    await runGeneration();
+    if (studioStep === "model") {
+      await executeGeneration();
+    } else if (studioStep === "scene") {
+      if (isVariationMode) await executeVariation();
+      else await executeGeneration();
+    } else if (studioStep === "tryon") {
+      await executeSwap();
+    }
   };
 
   const handleConfirmLowCredit = async () => {
     setShowLowCreditDialog(false);
-    await runGeneration();
+    await handleStepGenerate();
   };
+
+  const stepBtnProps = getStepButtonProps();
 
   return (
     <div className="flex h-full flex-col">
+      {/* Step indicator */}
+      <div className="flex border-b border-border">
+        {STEPS.map((step) => (
+          <button
+            key={step.id}
+            onClick={() => setStudioStep(step.id)}
+            className={cn(
+              "flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium transition-colors relative",
+              studioStep === step.id
+                ? "text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <step.icon className="h-3.5 w-3.5" />
+            {step.label}
+            {studioStep === step.id && (
+              <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 rounded-full bg-primary" />
+            )}
+          </button>
+        ))}
+      </div>
+
       <ScrollArea className="flex-1">
         <div className="space-y-4 p-3">
-          {/* Section 1: Model Agency */}
-          <div>
-            <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
-              <Sparkles className="h-4 w-4" />
-              Model Agency
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              {STYLE_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  onClick={() =>
-                    setPresetType(
-                      presetType === preset.id ? null : preset.id
-                    )
-                  }
-                  className={cn(
-                    "flex flex-col items-center gap-1 rounded-lg border-2 p-3 text-center transition-colors",
-                    presetType === preset.id
-                      ? "border-primary bg-primary/5"
-                      : "border-transparent bg-muted/50 hover:bg-muted"
-                  )}
-                >
-                  <preset.icon className="h-5 w-5" />
-                  <span className="text-xs font-medium">{preset.label}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {preset.description}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {/* Custom model options */}
-            <div className="mt-3 space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Gender</Label>
-                <Select value={gender} onValueChange={(v) => setGender(v as "female" | "male")}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="female">Female</SelectItem>
-                    <SelectItem value="male">Male</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Body Type</Label>
-                <Select value={bodyType} onValueChange={(v) => setBodyType(v as "slim" | "athletic" | "plus")}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="slim">Slim</SelectItem>
-                    <SelectItem value="athletic">Athletic</SelectItem>
-                    <SelectItem value="plus">Plus Size</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Age Range</Label>
-                <Select value={ageRange} onValueChange={(v) => setAgeRange(v as "20s" | "30s" | "40s")}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="20s">20s</SelectItem>
-                    <SelectItem value="30s">30s</SelectItem>
-                    <SelectItem value="40s">40s</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Section 2: Styling */}
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">Styling</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="tuck-in" className="text-xs">
-                  Tuck In
-                </Label>
-                <Switch
-                  id="tuck-in"
-                  checked={tuckIn}
-                  onCheckedChange={setTuckIn}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="sleeve-roll" className="text-xs">
-                  Sleeve Roll-up
-                </Label>
-                <Switch
-                  id="sleeve-roll"
-                  checked={sleeveRoll}
-                  onCheckedChange={setSleeveRoll}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="button-open" className="text-xs">
-                  Button Open
-                </Label>
-                <Switch
-                  id="button-open"
-                  checked={buttonOpen}
-                  onCheckedChange={setButtonOpen}
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="auto-coord" className="text-xs">
-                    Auto-Coordination
-                  </Label>
-                  <p className="text-[10px] text-muted-foreground">
-                    AI suggests matching items
-                  </p>
-                </div>
-                <Switch
-                  id="auto-coord"
-                  checked={autoCoordination}
-                  onCheckedChange={setAutoCoordination}
-                />
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Section 3: Director */}
-          <div>
-            <h3 className="mb-2 text-sm font-semibold">Director</h3>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Pose</Label>
-                <Select value={posePreset} onValueChange={setPosePreset}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POSE_PRESETS.map((pose) => (
-                      <SelectItem key={pose.id} value={pose.id}>
-                        {pose.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Camera Angle</Label>
-                <Select value={cameraAngle} onValueChange={setCameraAngle}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CAMERA_ANGLE_PRESETS.map((angle) => (
-                      <SelectItem key={angle.id} value={angle.id}>
-                        {angle.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Framing</Label>
-                <Select value={framing} onValueChange={setFraming}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FRAMING_PRESETS.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Background</Label>
-                <div className="grid grid-cols-4 gap-1">
-                  {BACKGROUND_PRESETS.map((bg) => (
+          {/* ===== STEP: Model Generation ===== */}
+          {studioStep === "model" && (
+            <>
+              <div>
+                <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                  <Sparkles className="h-4 w-4" />
+                  Style Preset
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {STYLE_PRESETS.map((preset) => (
                     <button
-                      key={bg.id}
-                      onClick={() => setBackgroundPreset(bg.id)}
+                      key={preset.id}
+                      onClick={() =>
+                        setPresetType(presetType === preset.id ? null : preset.id)
+                      }
                       className={cn(
-                        "rounded-md border px-1.5 py-1 text-[10px] transition-colors",
-                        backgroundPreset === bg.id
-                          ? "border-primary bg-primary/10 font-medium"
+                        "flex flex-col items-center gap-1 rounded-lg border-2 p-3 text-center transition-colors",
+                        presetType === preset.id
+                          ? "border-primary bg-primary/5"
                           : "border-transparent bg-muted/50 hover:bg-muted"
                       )}
                     >
-                      {bg.label}
+                      <preset.icon className="h-5 w-5" />
+                      <span className="text-xs font-medium">{preset.label}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {preset.description}
+                      </span>
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Lighting</Label>
-                <Select value={lightingPreset} onValueChange={setLightingPreset}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="studio">Studio</SelectItem>
-                    <SelectItem value="golden-hour">Golden Hour</SelectItem>
-                    <SelectItem value="overcast">Overcast</SelectItem>
-                    <SelectItem value="flash">Flash</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              <Separator />
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Model Options</h3>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Gender</Label>
+                    <Select value={gender} onValueChange={(v) => setGender(v as "female" | "male")}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="male">Male</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Body Type</Label>
+                    <Select value={bodyType} onValueChange={(v) => setBodyType(v as "slim" | "athletic" | "plus")}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="slim">Slim</SelectItem>
+                        <SelectItem value="athletic">Athletic</SelectItem>
+                        <SelectItem value="plus">Plus Size</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Age Range</Label>
+                    <Select value={ageRange} onValueChange={(v) => setAgeRange(v as "20s" | "30s" | "40s")}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="20s">20s</SelectItem>
+                        <SelectItem value="30s">30s</SelectItem>
+                        <SelectItem value="40s">40s</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+
+              <div className="rounded-lg bg-muted/50 p-3">
+                <p className="text-[11px] text-muted-foreground">
+                  A model will be generated wearing a basic white t-shirt and black shorts.
+                  Save the result as a Model to use in the next steps.
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* ===== STEP: Scene Direction ===== */}
+          {studioStep === "scene" && (
+            <>
+              {!hasModelImage && (
+                <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4 text-center">
+                  <User className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-xs text-muted-foreground">
+                    Select a model from the left panel first, or generate one in Step 1.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Pose & Camera</h3>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Pose</Label>
+                    <Select value={posePreset} onValueChange={setPosePreset}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {POSE_PRESETS.map((pose) => (
+                          <SelectItem key={pose.id} value={pose.id}>{pose.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Camera Angle</Label>
+                    <Select value={cameraAngle} onValueChange={setCameraAngle}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CAMERA_ANGLE_PRESETS.map((angle) => (
+                          <SelectItem key={angle.id} value={angle.id}>{angle.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Framing</Label>
+                    <Select value={framing} onValueChange={setFraming}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FRAMING_PRESETS.map((f) => (
+                          <SelectItem key={f.id} value={f.id}>{f.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Environment</h3>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Background</Label>
+                    <div className="grid grid-cols-4 gap-1">
+                      {BACKGROUND_PRESETS.map((bg) => (
+                        <button
+                          key={bg.id}
+                          onClick={() => setBackgroundPreset(bg.id)}
+                          className={cn(
+                            "rounded-md border px-1.5 py-1 text-[10px] transition-colors",
+                            backgroundPreset === bg.id
+                              ? "border-primary bg-primary/10 font-medium"
+                              : "border-transparent bg-muted/50 hover:bg-muted"
+                          )}
+                        >
+                          {bg.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Lighting</Label>
+                    <Select value={lightingPreset} onValueChange={setLightingPreset}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="studio">Studio</SelectItem>
+                        <SelectItem value="golden-hour">Golden Hour</SelectItem>
+                        <SelectItem value="overcast">Overcast</SelectItem>
+                        <SelectItem value="flash">Flash</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {selectedReference && (
+                <>
+                  <Separator />
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold">Reference</h3>
+                    <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-2">
+                      <img
+                        src={selectedReference.thumbnailUrl}
+                        alt={selectedReference.name}
+                        className="h-12 w-12 rounded object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate text-xs font-medium">{selectedReference.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          Mood, pose, and atmosphere will be matched
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* ===== STEP: Virtual Try-On ===== */}
+          {studioStep === "tryon" && (
+            <>
+              {!hasModelImage && (
+                <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4 text-center">
+                  <User className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-xs text-muted-foreground">
+                    Select a model from the left panel or generate one first.
+                  </p>
+                </div>
+              )}
+
+              {!selectedGarment && (
+                <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4 text-center">
+                  <Shirt className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-xs text-muted-foreground">
+                    Upload a garment in the Product tab to try on.
+                  </p>
+                </div>
+              )}
+
+              {selectedGarment && (
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold">Selected Garment</h3>
+                  <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-2">
+                    <img
+                      src={selectedGarment.thumbnailUrl}
+                      alt={selectedGarment.name}
+                      className="h-12 w-12 rounded object-cover"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-xs font-medium">{selectedGarment.name}</p>
+                      <Badge variant="secondary" className="text-[10px]">{selectedGarment.category}</Badge>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Fit Options</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="tuck-in" className="text-xs">Tuck In</Label>
+                    <Switch id="tuck-in" checked={tuckIn} onCheckedChange={setTuckIn} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sleeve-roll" className="text-xs">Sleeve Roll-up</Label>
+                    <Switch id="sleeve-roll" checked={sleeveRoll} onCheckedChange={setSleeveRoll} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="button-open" className="text-xs">Button Open</Label>
+                    <Switch id="button-open" checked={buttonOpen} onCheckedChange={setButtonOpen} />
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="auto-coord" className="text-xs">Auto-Coordination</Label>
+                      <p className="text-[10px] text-muted-foreground">AI suggests matching items</p>
+                    </div>
+                    <Switch id="auto-coord" checked={autoCoordination} onCheckedChange={setAutoCoordination} />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ===== STEP: Fine Tune ===== */}
+          {studioStep === "finetune" && (
+            <>
+              {!selectedGeneratedImage && (
+                <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4 text-center">
+                  <Camera className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-xs text-muted-foreground">
+                    Generate an image first, then select it on the canvas to fine-tune.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Upscale</h3>
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  Enhance resolution to 4K for print-ready output.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  disabled={!selectedGeneratedImage}
+                >
+                  <ArrowUpFromLine className="mr-1.5 h-3 w-3" />
+                  Upscale to 4K
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Digital Ironing</h3>
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  Remove unwanted wrinkles and creases from the garment.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  disabled={!selectedGeneratedImage}
+                >
+                  <Wand2 className="mr-1.5 h-3 w-3" />
+                  Apply Digital Ironing
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Natural Wrinkles</h3>
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  Add realistic natural fabric folds for authenticity.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  disabled={!selectedGeneratedImage}
+                >
+                  <Wand2 className="mr-1.5 h-3 w-3" />
+                  Add Natural Wrinkles
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold">Styling</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="ft-tuck" className="text-xs">Tuck In</Label>
+                    <Switch id="ft-tuck" checked={tuckIn} onCheckedChange={setTuckIn} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="ft-sleeve" className="text-xs">Sleeve Roll-up</Label>
+                    <Switch id="ft-sleeve" checked={sleeveRoll} onCheckedChange={setSleeveRoll} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="ft-button" className="text-xs">Button Open</Label>
+                    <Switch id="ft-button" checked={buttonOpen} onCheckedChange={setButtonOpen} />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </ScrollArea>
 
-      {/* Section 4: Mode Indicator + Generate */}
+      {/* Bottom action bar */}
       <div className="border-t border-border p-3">
-        {/* Mode indicator */}
-        <div className="mb-2 flex items-center justify-center gap-1.5">
-          {isSwapMode ? (
-            <Badge variant="default" className="gap-1 text-[10px]">
-              <ArrowRightLeft className="h-3 w-3" />
-              Lookbook Mode (Model + Garment)
-            </Badge>
-          ) : isReferenceVariation ? (
-            <Badge variant="default" className="gap-1 text-[10px]">
-              <Camera className="h-3 w-3" />
-              Reference Variation (Model + Reference)
-            </Badge>
-          ) : isVariationMode ? (
-            <Badge variant="default" className="gap-1 text-[10px]">
-              <Camera className="h-3 w-3" />
-              Variation Mode (Pose / Angle)
-            </Badge>
-          ) : selectedGarmentId ? (
-            <Badge variant="outline" className="gap-1 text-[10px]">
-              <Shirt className="h-3 w-3" />
-              Garment selected — select a model to swap
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="gap-1 text-[10px]">
-              <User className="h-3 w-3" />
-              Model Generation
-            </Badge>
-          )}
-        </div>
-
-        {isExhausted && (
+        {isExhausted && studioStep !== "finetune" && (
           <div className="mb-2 flex items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1.5 text-destructive">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            <p className="text-[10px]">
-              No credits remaining. Upgrade your plan to continue generating.
-            </p>
+            <p className="text-[10px]">No credits remaining. Upgrade your plan.</p>
           </div>
         )}
-        {!canClickGenerate && !isGenerating && !isSwapping && !isExhausted && (
-          <p className="mb-2 text-center text-[10px] text-muted-foreground">
-            Select a style preset, a model, or upload a garment
-          </p>
-        )}
-        <Button
-          className="w-full"
-          size="lg"
-          disabled={!canClickGenerate}
-          onClick={handleGenerate}
-          data-testid="generate-button"
-        >
-          {isGenerating || isSwapping ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {isSwapping ? "Swapping Garment..." : isVariationMode ? "Generating Variations..." : "Generating..."}
-            </>
-          ) : isSwapMode ? (
-            <>
-              <ArrowRightLeft className="mr-2 h-4 w-4" />
-              Swap Garment onto Model
-            </>
-          ) : isVariationMode ? (
-            <>
-              <Camera className="mr-2 h-4 w-4" />
-              Generate Variation
-            </>
-          ) : (
-            <>
-              <Wand2 className="mr-2 h-4 w-4" />
-              Generate Model
-            </>
-          )}
-        </Button>
-        {(isGenerating || isSwapping) && (
-          <p className="mt-1 text-center text-[10px] text-muted-foreground">
-            Estimated time: ~30 seconds
-          </p>
-        )}
-        <div className="mt-2 flex items-center justify-center gap-2">
-          <Badge variant="secondary" className="text-[10px]">
-            4 variations will be generated
-          </Badge>
-          {!isUnlimited && (
-            <Badge
-              variant={isExhausted ? "destructive" : isLow ? "outline" : "secondary"}
-              className="text-[10px]"
+
+        {stepBtnProps && (
+          <>
+            <Button
+              className="w-full"
+              size="lg"
+              disabled={!canClickStep()}
+              onClick={handleStepGenerate}
+              data-testid="generate-button"
             >
-              {remaining} left
-            </Badge>
-          )}
-        </div>
+              {stepBtnProps.spinning ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <stepBtnProps.icon className="mr-2 h-4 w-4" />
+              )}
+              {stepBtnProps.label}
+            </Button>
+            {(isGenerating || isSwapping) && (
+              <p className="mt-1 text-center text-[10px] text-muted-foreground">
+                Estimated time: ~30 seconds
+              </p>
+            )}
+            <div className="mt-2 flex items-center justify-center gap-2">
+              <Badge variant="secondary" className="text-[10px]">
+                4 variations will be generated
+              </Badge>
+              {!isUnlimited && (
+                <Badge
+                  variant={isExhausted ? "destructive" : isLow ? "outline" : "secondary"}
+                  className="text-[10px]"
+                >
+                  {remaining} left
+                </Badge>
+              )}
+            </div>
+          </>
+        )}
+
+        {studioStep === "finetune" && (
+          <p className="text-center text-[11px] text-muted-foreground">
+            Use the fine-tune actions above on the selected image.
+          </p>
+        )}
       </div>
 
       {/* Low credit confirmation dialog */}

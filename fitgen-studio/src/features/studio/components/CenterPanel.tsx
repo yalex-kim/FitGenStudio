@@ -47,6 +47,7 @@ import {
   ImagePlus,
   Footprints,
   X,
+  Palette,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { GeneratedImage } from "@/types";
@@ -207,6 +208,7 @@ interface ImageToolbarProps {
   onCompare: () => void;
   onRegenerate: () => void;
   onSave: () => void;
+  onSaveAsReference: () => void;
 }
 
 function ImageToolbar({
@@ -218,6 +220,7 @@ function ImageToolbar({
   onCompare,
   onRegenerate,
   onSave,
+  onSaveAsReference,
 }: ImageToolbarProps) {
   return (
     <div className="flex items-center gap-1">
@@ -227,7 +230,15 @@ function ImageToolbar({
             <Save className="h-4 w-4" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Save to My Models</TooltipContent>
+        <TooltipContent>Save as Model</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onSaveAsReference}>
+            <Palette className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Save as Reference</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -424,6 +435,21 @@ export function CenterPanel() {
     }
 
     toast.success("Saved to My Models!");
+  }, []);
+
+  const handleSaveAsReference = useCallback(async (image: GeneratedImage) => {
+    if (!image.url) return;
+    const refAsset = {
+      id: `r-${image.id}`,
+      name: image.prompt || "Generated Reference",
+      thumbnailUrl: image.thumbnailUrl || image.url,
+      originalUrl: image.url,
+      createdAt: image.createdAt,
+    };
+    useAssetStore.getState().addReference(refAsset);
+    useStudioStore.getState().addReference(refAsset);
+    useStudioStore.getState().selectReference(refAsset.id);
+    toast.success("Saved as Reference!");
   }, []);
 
   const handleUpscale = useCallback(async (image: GeneratedImage) => {
@@ -722,6 +748,7 @@ export function CenterPanel() {
                 onCompare={() => setViewMode("compare")}
                 onRegenerate={() => {}}
                 onSave={() => handleSave(image)}
+                onSaveAsReference={() => handleSaveAsReference(image)}
               />
             )}
             {image && (

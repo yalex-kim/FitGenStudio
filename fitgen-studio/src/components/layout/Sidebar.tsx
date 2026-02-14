@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Paintbrush,
@@ -6,10 +6,22 @@ import {
   Image,
   Settings,
   X,
+  UserRound,
+  Clapperboard,
+  Shirt,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebarStore } from "@/stores/sidebarStore";
+import { useStudioStore, type StudioStep } from "@/stores/studioStore";
 import { Button } from "@/components/ui/button";
+
+const studioSubItems: { step: StudioStep; icon: typeof UserRound; label: string }[] = [
+  { step: "model", icon: UserRound, label: "Model Generation" },
+  { step: "scene", icon: Clapperboard, label: "Scene Direction" },
+  { step: "tryon", icon: Shirt, label: "Virtual Try-On" },
+  { step: "finetune", icon: SlidersHorizontal, label: "Fine Tune" },
+];
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -21,6 +33,10 @@ const navItems = [
 
 export function Sidebar() {
   const { isOpen, close } = useSidebarStore();
+  const location = useLocation();
+  const studioStep = useStudioStore((s) => s.studioStep);
+  const setStudioStep = useStudioStore((s) => s.setStudioStep);
+  const isStudioActive = location.pathname === "/studio";
 
   return (
     <>
@@ -62,25 +78,50 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-3">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={close}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )
-              }
-              end={item.to === "/"}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {item.label}
-            </NavLink>
+            <div key={item.to}>
+              <NavLink
+                to={item.to}
+                onClick={close}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  )
+                }
+                end={item.to === "/"}
+              >
+                <item.icon className="h-5 w-5 shrink-0" />
+                {item.label}
+              </NavLink>
+
+              {/* Studio sub-items */}
+              {item.to === "/studio" && isStudioActive && (
+                <div className="ml-4 mt-1 space-y-0.5 border-l-2 border-sidebar-border pl-3">
+                  {studioSubItems.map((sub) => (
+                    <button
+                      key={sub.step}
+                      onClick={() => {
+                        setStudioStep(sub.step);
+                        close();
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                        studioStep === sub.step
+                          ? "bg-sidebar-accent/60 text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/60 hover:bg-sidebar-accent/40 hover:text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <sub.icon className="h-3.5 w-3.5 shrink-0" />
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
 

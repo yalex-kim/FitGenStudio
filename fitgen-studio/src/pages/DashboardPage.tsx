@@ -7,8 +7,14 @@ import {
   CreditCard,
   ArrowRight,
   Clock,
+  UserRound,
+  Clapperboard,
+  Shirt,
+  SlidersHorizontal,
+  ChevronRight,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
+import { useStudioStore, type StudioStep } from "@/stores/studioStore";
 import { useUsageStore } from "@/stores/usageStore";
 import { useAssetStore } from "@/stores/assetStore";
 import { useGalleryStore } from "@/stores/galleryStore";
@@ -23,6 +29,38 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Tier } from "@/lib/usageLimits";
+
+const WORKFLOW_STEPS: {
+  id: StudioStep;
+  label: string;
+  description: string;
+  icon: typeof UserRound;
+}[] = [
+  {
+    id: "model",
+    label: "Model Generation",
+    description: "Create an AI model with basic outfit, face, hair, and style.",
+    icon: UserRound,
+  },
+  {
+    id: "scene",
+    label: "Scene Direction",
+    description: "Set background, pose, camera angle, framing, and reference.",
+    icon: Clapperboard,
+  },
+  {
+    id: "tryon",
+    label: "Virtual Try-On",
+    description: "Dress the model with your garment product photos.",
+    icon: Shirt,
+  },
+  {
+    id: "finetune",
+    label: "Fine Tune",
+    description: "Upscale, digital ironing, wrinkles, and styling adjustments.",
+    icon: SlidersHorizontal,
+  },
+];
 
 function DashboardSkeleton() {
   return (
@@ -118,6 +156,40 @@ export function DashboardPage() {
             <Upload className="mr-2 h-4 w-4" />
             Upload Garment
           </Button>
+        </div>
+      </div>
+
+      {/* Workflow Steps */}
+      <div>
+        <h2 className="mb-3 text-lg font-semibold">Generation Process</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {WORKFLOW_STEPS.map((step, i) => (
+            <div key={step.id} className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  useStudioStore.getState().setStudioStep(step.id);
+                  navigate("/studio");
+                }}
+                className="group flex-1 rounded-xl border-2 border-border bg-card p-4 text-left transition-all hover:border-primary hover:shadow-md"
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                    <step.icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-bold text-muted-foreground">
+                    STEP {i + 1}
+                  </span>
+                </div>
+                <h3 className="text-sm font-semibold">{step.label}</h3>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  {step.description}
+                </p>
+              </button>
+              {i < WORKFLOW_STEPS.length - 1 && (
+                <ChevronRight className="hidden h-5 w-5 shrink-0 text-muted-foreground/40 lg:block" />
+              )}
+            </div>
+          ))}
         </div>
       </div>
 

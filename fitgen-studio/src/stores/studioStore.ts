@@ -2,8 +2,13 @@ import { create } from "zustand";
 import type { ModelAsset, GarmentAsset, ReferenceAsset, GeneratedImage } from "@/types";
 
 export type StudioLeftTab = "product" | "models" | "reference";
+export type StudioStep = "model" | "scene" | "tryon" | "finetune";
 
 export interface StudioState {
+  // Workflow step
+  studioStep: StudioStep;
+  setStudioStep: (step: StudioStep) => void;
+
   // Left panel
   leftTab: StudioLeftTab;
   setLeftTab: (tab: StudioLeftTab) => void;
@@ -87,6 +92,10 @@ export interface StudioState {
 }
 
 export const useStudioStore = create<StudioState>()((set) => ({
+  // Workflow step
+  studioStep: "model",
+  setStudioStep: (step) => set({ studioStep: step }),
+
   // Left panel
   leftTab: "product",
   setLeftTab: (tab) => set({ leftTab: tab }),
