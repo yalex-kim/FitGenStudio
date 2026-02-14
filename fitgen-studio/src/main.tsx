@@ -8,6 +8,9 @@ import { useAuthStore } from "@/stores/authStore";
 import "./index.css";
 import App from "./App.tsx";
 
+// Clean up stale localStorage from removed persist middleware
+localStorage.removeItem("fitgen-gallery");
+
 // Initialize auth session on app start
 useAuthStore.getState().initialize();
 
