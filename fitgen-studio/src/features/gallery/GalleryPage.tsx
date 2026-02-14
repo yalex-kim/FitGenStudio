@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import toast from "react-hot-toast";
+import { uploadBase64ToStorage } from "@/lib/storageUpload";
 import { useAuthStore } from "@/stores/authStore";
 import { useAssetStore } from "@/stores/assetStore";
 import { useStudioStore } from "@/stores/studioStore";
@@ -249,7 +250,8 @@ export function GalleryPage() {
         }
 
         const result = await resp.json();
-        const upscaledUrl = `data:${result.data.mimeType};base64,${result.data.imageBase64}`;
+        const userId = useAuthStore.getState().user?.id;
+        const upscaledUrl = await uploadBase64ToStorage(result.data.imageBase64, result.data.mimeType, userId);
 
         // Update image in gallery store
         useGalleryStore.getState().updateImage(image.id, {

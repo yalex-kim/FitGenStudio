@@ -15,6 +15,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { uploadBase64ToStorage } from "@/lib/storageUpload";
 import { cn } from "@/lib/utils";
 import {
   Select,
@@ -447,7 +448,8 @@ export function CenterPanel() {
       }
 
       const result = await resp.json();
-      const upscaledUrl = `data:${result.data.mimeType};base64,${result.data.imageBase64}`;
+      const userId = useAuthStore.getState().user?.id;
+      const upscaledUrl = await uploadBase64ToStorage(result.data.imageBase64, result.data.mimeType, userId);
 
       // Replace image in generatedImages
       const { generatedImages: imgs, setGeneratedImages } = useStudioStore.getState();
@@ -495,7 +497,8 @@ export function CenterPanel() {
       }
 
       const result = await resp.json();
-      const editedUrl = `data:${result.data.mimeType};base64,${result.data.imageBase64}`;
+      const userId = useAuthStore.getState().user?.id;
+      const editedUrl = await uploadBase64ToStorage(result.data.imageBase64, result.data.mimeType, userId);
 
       // Add edited image as a new variation (preserve original)
       const newImage: GeneratedImage = {

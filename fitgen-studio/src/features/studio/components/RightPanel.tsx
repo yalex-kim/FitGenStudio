@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { uploadBase64ToStorage } from "@/lib/storageUpload";
 import { cn } from "@/lib/utils";
 import {
   Sparkles,
@@ -61,12 +62,28 @@ const BACKGROUND_PRESETS = [
 ];
 
 const POSE_PRESETS = [
-  { id: "standing-front", label: "Standing (Front)" },
-  { id: "standing-34", label: "Standing (3/4)" },
-  { id: "standing-side", label: "Standing (Side)" },
+  { id: "standing", label: "Standing" },
   { id: "walking", label: "Walking" },
+  { id: "running", label: "Running" },
   { id: "seated", label: "Seated" },
   { id: "dynamic", label: "Dynamic" },
+  { id: "leaning", label: "Leaning" },
+];
+
+const CAMERA_ANGLE_PRESETS = [
+  { id: "front", label: "Front" },
+  { id: "three-quarter", label: "3/4 Angle" },
+  { id: "side", label: "Side/Profile" },
+  { id: "low-angle", label: "Low Angle" },
+  { id: "high-angle", label: "High Angle" },
+  { id: "over-shoulder", label: "Over Shoulder" },
+];
+
+const FRAMING_PRESETS = [
+  { id: "full-body", label: "Full Body" },
+  { id: "three-quarter-body", label: "3/4 Body" },
+  { id: "upper-body", label: "Upper Body" },
+  { id: "close-up", label: "Close-up" },
 ];
 
 /**
@@ -142,6 +159,10 @@ export function RightPanel() {
     setLightingPreset,
     posePreset,
     setPosePreset,
+    cameraAngle,
+    setCameraAngle,
+    framing,
+    setFraming,
     selectedGarmentId,
     selectedModelId,
     generatedImages,
@@ -204,7 +225,29 @@ export function RightPanel() {
     };
     return bgMap[bg] ?? bg;
   };
-  const mapPose = (p: string) => (p === "standing-34" ? "standing-three-quarter" : p);
+  const apiResultsToImages = async (
+    results: Array<{ data: { mimeType: string; imageBase64: string; promptUsed?: string } }>,
+    modelId: string,
+    garmentId: string | undefined,
+  ) => {
+    const userId = user?.id;
+    const uploaded = await Promise.all(
+      results.map(async (r) => {
+        const url = await uploadBase64ToStorage(r.data.imageBase64, r.data.mimeType, userId);
+        return {
+          id: crypto.randomUUID(),
+          url,
+          thumbnailUrl: url,
+          prompt: r.data.promptUsed || "",
+          modelId,
+          garmentId,
+          createdAt: new Date().toISOString(),
+          status: "completed" as const,
+        };
+      }),
+    );
+    return uploaded;
+  };
 
   const executeGeneration = async () => {
     setIsGenerating(true);
@@ -217,7 +260,9 @@ export function RightPanel() {
       bodyType: mapBodyType(bodyType),
       ageRange,
       style: presetType || "lovely",
-      pose: mapPose(posePreset),
+      pose: posePreset,
+      cameraAngle,
+      framing,
       background: mapBackground(backgroundPreset),
       lighting: lightingPreset,
     };
@@ -247,29 +292,25 @@ export function RightPanel() {
       setGenerationProgress(30);
 
       const results = await Promise.allSettled(promises);
-      setGenerationProgress(90);
+      setGenerationProgress(80);
 
-      const images = results
-        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
-        .map((r) => ({
-          id: crypto.randomUUID(),
-          url: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
-          thumbnailUrl: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
-          prompt: r.value.data.promptUsed || "",
-          modelId: selectedModelId || "",
-          garmentId: selectedGarmentId || undefined,
-          createdAt: new Date().toISOString(),
-          status: "completed" as const,
-        }));
+      const fulfilled = results
+        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled");
 
-      setGenerationProgress(100);
-
-      if (images.length === 0) {
+      if (fulfilled.length === 0) {
         const firstError = results.find(
           (r): r is PromiseRejectedResult => r.status === "rejected"
         );
         throw new Error(firstError?.reason?.message || "All generations failed");
       }
+
+      const images = await apiResultsToImages(
+        fulfilled.map((r) => r.value),
+        selectedModelId || "",
+        selectedGarmentId || undefined,
+      );
+
+      setGenerationProgress(100);
 
       setGeneratedImages(images);
       useGalleryStore.getState().addImages(images);
@@ -338,29 +379,25 @@ export function RightPanel() {
       setGenerationProgress(30);
 
       const results = await Promise.allSettled(promises);
-      setGenerationProgress(90);
+      setGenerationProgress(80);
 
-      const images = results
-        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
-        .map((r) => ({
-          id: crypto.randomUUID(),
-          url: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
-          thumbnailUrl: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
-          prompt: r.value.data.promptUsed || "",
-          modelId: selectedModelId || selectedGeneratedImage?.id || "",
-          garmentId: selectedGarmentId || undefined,
-          createdAt: new Date().toISOString(),
-          status: "completed" as const,
-        }));
+      const fulfilled = results
+        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled");
 
-      setGenerationProgress(100);
-
-      if (images.length === 0) {
+      if (fulfilled.length === 0) {
         const firstError = results.find(
           (r): r is PromiseRejectedResult => r.status === "rejected"
         );
         throw new Error(firstError?.reason?.message || "All swap generations failed");
       }
+
+      const images = await apiResultsToImages(
+        fulfilled.map((r) => r.value),
+        selectedModelId || selectedGeneratedImage?.id || "",
+        selectedGarmentId || undefined,
+      );
+
+      setGenerationProgress(100);
 
       setSwapResults(images);
       setGeneratedImages(images);
@@ -405,7 +442,9 @@ export function RightPanel() {
       const variationBody: Record<string, unknown> = {
         modelImageBase64: modelData.base64,
         modelMimeType: modelData.mimeType,
-        pose: mapPose(posePreset),
+        pose: posePreset,
+        cameraAngle,
+        framing,
         background: mapBackground(backgroundPreset),
         lighting: lightingPreset,
       };
@@ -436,29 +475,25 @@ export function RightPanel() {
       setGenerationProgress(30);
 
       const results = await Promise.allSettled(promises);
-      setGenerationProgress(90);
+      setGenerationProgress(80);
 
-      const images = results
-        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled")
-        .map((r) => ({
-          id: crypto.randomUUID(),
-          url: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
-          thumbnailUrl: `data:${r.value.data.mimeType};base64,${r.value.data.imageBase64}`,
-          prompt: r.value.data.promptUsed || "",
-          modelId: selectedModelId || selectedGeneratedImage?.id || "",
-          garmentId: undefined,
-          createdAt: new Date().toISOString(),
-          status: "completed" as const,
-        }));
+      const fulfilled = results
+        .filter((r): r is PromiseFulfilledResult<any> => r.status === "fulfilled");
 
-      setGenerationProgress(100);
-
-      if (images.length === 0) {
+      if (fulfilled.length === 0) {
         const firstError = results.find(
           (r): r is PromiseRejectedResult => r.status === "rejected"
         );
         throw new Error(firstError?.reason?.message || "All variations failed");
       }
+
+      const images = await apiResultsToImages(
+        fulfilled.map((r) => r.value),
+        selectedModelId || selectedGeneratedImage?.id || "",
+        undefined,
+      );
+
+      setGenerationProgress(100);
 
       setGeneratedImages(images);
       useGalleryStore.getState().addImages(images);
@@ -648,6 +683,36 @@ export function RightPanel() {
                     {POSE_PRESETS.map((pose) => (
                       <SelectItem key={pose.id} value={pose.id}>
                         {pose.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Camera Angle</Label>
+                <Select value={cameraAngle} onValueChange={setCameraAngle}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CAMERA_ANGLE_PRESETS.map((angle) => (
+                      <SelectItem key={angle.id} value={angle.id}>
+                        {angle.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Framing</Label>
+                <Select value={framing} onValueChange={setFraming}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FRAMING_PRESETS.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

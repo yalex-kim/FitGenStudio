@@ -50,6 +50,10 @@ export interface StudioState {
   setLightingPreset: (lighting: string) => void;
   posePreset: string;
   setPosePreset: (pose: string) => void;
+  cameraAngle: string;
+  setCameraAngle: (angle: string) => void;
+  framing: string;
+  setFraming: (framing: string) => void;
 
   // Canvas
   generatedImages: GeneratedImage[];
@@ -133,8 +137,12 @@ export const useStudioStore = create<StudioState>()((set) => ({
   setBackgroundPreset: (bg) => set({ backgroundPreset: bg }),
   lightingPreset: "studio",
   setLightingPreset: (lighting) => set({ lightingPreset: lighting }),
-  posePreset: "standing-front",
+  posePreset: "standing",
   setPosePreset: (pose) => set({ posePreset: pose }),
+  cameraAngle: "front",
+  setCameraAngle: (angle) => set({ cameraAngle: angle }),
+  framing: "full-body",
+  setFraming: (framing) => set({ framing }),
 
   // Canvas
   generatedImages: [],

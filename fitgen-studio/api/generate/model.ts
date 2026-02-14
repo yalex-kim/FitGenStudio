@@ -9,6 +9,8 @@ interface ModelRequestBody {
   pose: string;
   background: string;
   lighting: string;
+  cameraAngle?: string;
+  framing?: string;
   customBackground?: string;
   ethnicity?: string;
   hairStyle?: string;
@@ -19,7 +21,12 @@ const VALID_GENDERS = ['female', 'male'];
 const VALID_BODY_TYPES = ['slim', 'athletic', 'plus-size'];
 const VALID_AGE_RANGES = ['20s', '30s', '40s'];
 const VALID_STYLES = ['lovely', 'chic', 'sporty', 'street'];
-const VALID_POSES = ['standing-front', 'standing-three-quarter', 'standing-side', 'walking', 'seated', 'dynamic'];
+const VALID_POSES = [
+  'standing-front', 'standing-three-quarter', 'standing-side', 'walking', 'seated', 'dynamic',
+  'standing', 'running', 'leaning',
+];
+const VALID_CAMERA_ANGLES = ['front', 'three-quarter', 'side', 'low-angle', 'high-angle', 'over-shoulder'];
+const VALID_FRAMINGS = ['full-body', 'three-quarter-body', 'upper-body', 'close-up'];
 const VALID_BACKGROUNDS = [
   'studio-white', 'studio-gray', 'studio-colored',
   'outdoor-park', 'outdoor-street', 'outdoor-urban', 'outdoor-nature',
@@ -48,6 +55,12 @@ function validateBody(body: unknown): { valid: true; data: ModelRequestBody } | 
   }
   if (!b.pose || !VALID_POSES.includes(b.pose as string)) {
     return { valid: false, error: `Invalid pose. Must be one of: ${VALID_POSES.join(', ')}` };
+  }
+  if (b.cameraAngle && !VALID_CAMERA_ANGLES.includes(b.cameraAngle as string)) {
+    return { valid: false, error: `Invalid cameraAngle. Must be one of: ${VALID_CAMERA_ANGLES.join(', ')}` };
+  }
+  if (b.framing && !VALID_FRAMINGS.includes(b.framing as string)) {
+    return { valid: false, error: `Invalid framing. Must be one of: ${VALID_FRAMINGS.join(', ')}` };
   }
   if (!b.background || !VALID_BACKGROUNDS.includes(b.background as string)) {
     return { valid: false, error: `Invalid background. Must be one of: ${VALID_BACKGROUNDS.join(', ')}` };
@@ -112,12 +125,29 @@ function buildPrompt(params: ModelRequestBody): string {
     street: 'Urban casual street fashion look with effortless cool and relaxed confidence.',
   };
   const poseMap: Record<string, string> = {
-    'standing-front': 'Standing facing the camera directly, arms relaxed, full body visible.',
-    'standing-three-quarter': 'Standing at a 3/4 angle to the camera, full body visible.',
-    'standing-side': 'Standing in profile view, head slightly toward camera, full body visible.',
-    walking: 'Mid-stride walking pose, natural arm swing, full body visible.',
-    seated: 'Seated with upright posture, legs positioned attractively, full body visible.',
-    dynamic: 'Expressive fashion editorial pose with movement and energy, full body visible.',
+    'standing': 'Standing naturally, balanced posture.',
+    'standing-front': 'Standing facing the camera directly, arms relaxed.',
+    'standing-three-quarter': 'Standing at a 3/4 angle to the camera.',
+    'standing-side': 'Standing in profile view, head slightly toward camera.',
+    walking: 'Mid-stride walking pose, natural arm swing.',
+    running: 'Running pose with dynamic leg and arm movement.',
+    seated: 'Seated with upright posture, legs positioned attractively.',
+    dynamic: 'Expressive fashion editorial pose with movement and energy.',
+    leaning: 'Leaning casually against a surface, relaxed posture.',
+  };
+  const cameraAngleMap: Record<string, string> = {
+    front: 'Shot straight on from the front, eye level.',
+    'three-quarter': 'Shot from a 3/4 angle to the subject.',
+    side: 'Shot from the side, profile view.',
+    'low-angle': 'Shot from a low angle looking up.',
+    'high-angle': 'Shot from a high angle looking down.',
+    'over-shoulder': 'Shot from over the shoulder.',
+  };
+  const framingMap: Record<string, string> = {
+    'full-body': 'Full body visible from head to toe.',
+    'three-quarter-body': '3/4 body framing, visible from head to just above the knees.',
+    'upper-body': 'Upper body framing, visible from the waist up.',
+    'close-up': 'Close-up framing, visible from the chest up.',
   };
   const bgMap: Record<string, string> = {
     'studio-white': 'Clean white seamless studio background.',
@@ -144,12 +174,17 @@ function buildPrompt(params: ModelRequestBody): string {
   const hairParts = [params.hairStyle, params.hairColor ? `${params.hairColor} hair` : ''].filter(Boolean).join(', ');
   const hairPart = hairParts ? ` with ${hairParts}` : '';
 
+  const cameraAngle = params.cameraAngle || 'front';
+  const framing = params.framing || 'full-body';
+
   return [
     'Generate a photorealistic, high-resolution fashion lookbook photograph. NOT an illustration.',
     '',
     `Subject: ${genderMap[params.gender]} with a ${bodyMap[params.bodyType]}, in ${pronoun} ${params.ageRange}${ethPart}${hairPart}.`,
     `Style: ${styleMap[params.style]}`,
-    `Pose: ${poseMap[params.pose]}`,
+    `Pose: ${poseMap[params.pose] || poseMap['standing']}`,
+    `Camera Angle: ${cameraAngleMap[cameraAngle] || cameraAngleMap['front']}`,
+    `Framing: ${framingMap[framing] || framingMap['full-body']}`,
     `Background: ${bgMap[params.background]}`,
     `Lighting: ${lightMap[params.lighting]}`,
     '',

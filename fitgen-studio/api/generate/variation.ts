@@ -9,10 +9,17 @@ interface VariationRequestBody {
   pose: string;
   background: string;
   lighting: string;
+  cameraAngle?: string;
+  framing?: string;
   customBackground?: string;
 }
 
-const VALID_POSES = ['standing-front', 'standing-three-quarter', 'standing-side', 'walking', 'seated', 'dynamic'];
+const VALID_POSES = [
+  'standing-front', 'standing-three-quarter', 'standing-side', 'walking', 'seated', 'dynamic',
+  'standing', 'running', 'leaning',
+];
+const VALID_CAMERA_ANGLES = ['front', 'three-quarter', 'side', 'low-angle', 'high-angle', 'over-shoulder'];
+const VALID_FRAMINGS = ['full-body', 'three-quarter-body', 'upper-body', 'close-up'];
 const VALID_BACKGROUNDS = [
   'studio-white', 'studio-gray', 'studio-colored',
   'outdoor-park', 'outdoor-street', 'outdoor-urban', 'outdoor-nature',
@@ -41,6 +48,12 @@ function validateBody(body: unknown): { valid: true; data: VariationRequestBody 
   if (!b.pose || !VALID_POSES.includes(b.pose as string)) {
     return { valid: false, error: `Invalid pose. Must be one of: ${VALID_POSES.join(', ')}` };
   }
+  if (b.cameraAngle && !VALID_CAMERA_ANGLES.includes(b.cameraAngle as string)) {
+    return { valid: false, error: `Invalid cameraAngle. Must be one of: ${VALID_CAMERA_ANGLES.join(', ')}` };
+  }
+  if (b.framing && !VALID_FRAMINGS.includes(b.framing as string)) {
+    return { valid: false, error: `Invalid framing. Must be one of: ${VALID_FRAMINGS.join(', ')}` };
+  }
   if (!b.background || !VALID_BACKGROUNDS.includes(b.background as string)) {
     return { valid: false, error: `Invalid background. Must be one of: ${VALID_BACKGROUNDS.join(', ')}` };
   }
@@ -67,12 +80,31 @@ const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
 const POSE_DESC: Record<string, string> = {
-  'standing-front': 'Standing facing camera directly, arms relaxed, full body visible.',
-  'standing-three-quarter': 'Standing at 3/4 angle to camera, full body visible.',
-  'standing-side': 'Standing in profile view, head slightly toward camera, full body visible.',
-  walking: 'Mid-stride walking pose, natural arm swing, full body visible.',
-  seated: 'Seated with upright posture, full body visible.',
-  dynamic: 'Expressive fashion editorial pose with movement, full body visible.',
+  standing: 'Standing naturally, balanced posture.',
+  'standing-front': 'Standing facing camera directly, arms relaxed.',
+  'standing-three-quarter': 'Standing at 3/4 angle to camera.',
+  'standing-side': 'Standing in profile view, head slightly toward camera.',
+  walking: 'Mid-stride walking pose, natural arm swing.',
+  running: 'Running pose with dynamic leg and arm movement.',
+  seated: 'Seated with upright posture.',
+  dynamic: 'Expressive fashion editorial pose with movement.',
+  leaning: 'Leaning casually against a surface, relaxed posture.',
+};
+
+const CAMERA_ANGLE_DESC: Record<string, string> = {
+  front: 'Shot straight on from the front, eye level.',
+  'three-quarter': 'Shot from a 3/4 angle to the subject.',
+  side: 'Shot from the side, profile view.',
+  'low-angle': 'Shot from a low angle looking up.',
+  'high-angle': 'Shot from a high angle looking down.',
+  'over-shoulder': 'Shot from over the shoulder.',
+};
+
+const FRAMING_DESC: Record<string, string> = {
+  'full-body': 'Full body visible from head to toe.',
+  'three-quarter-body': '3/4 body framing, visible from head to just above the knees.',
+  'upper-body': 'Upper body framing, visible from the waist up.',
+  'close-up': 'Close-up framing, visible from the chest up.',
 };
 
 const BG_DESC: Record<string, string> = {
@@ -122,11 +154,16 @@ function buildVariationInstruction(data: VariationRequestBody): string {
     lines.push('- Only change pose, background, and lighting as specified.');
   }
 
+  const cameraAngle = data.cameraAngle || 'front';
+  const framing = data.framing || 'full-body';
+
   lines.push(
     '- Result should look like a real photograph from the same session.',
     '',
-    `New Pose: ${POSE_DESC[data.pose]}`,
-    `New Background: ${bgDesc}`,
+    `Pose: ${POSE_DESC[data.pose] || POSE_DESC['standing']}`,
+    `Camera Angle: ${CAMERA_ANGLE_DESC[cameraAngle] || CAMERA_ANGLE_DESC['front']}`,
+    `Framing: ${FRAMING_DESC[framing] || FRAMING_DESC['full-body']}`,
+    `Background: ${bgDesc}`,
     `Lighting: ${LIGHT_DESC[data.lighting]}`,
     '',
     'Output: photorealistic high-resolution fashion lookbook photo, ultra sharp, professional color grading.',
