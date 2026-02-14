@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStudioStore } from "@/stores/studioStore";
+import { useAssetStore } from "@/stores/assetStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,49 +15,27 @@ export function LeftPanel() {
   const {
     leftTab,
     setLeftTab,
-    garments,
-    addGarment,
-    removeGarment,
     selectedGarmentId,
     selectGarment,
-    models,
-    removeModel,
     selectedModelId,
     selectModel,
-    references,
-    addReference,
-    removeReference,
   } = useStudioStore();
+
+  // Read assets from assetStore (Supabase-backed)
+  const garments = useAssetStore((s) => s.garments);
+  const models = useAssetStore((s) => s.models);
+  const references = useAssetStore((s) => s.references);
+  const uploadFiles = useAssetStore((s) => s.uploadFiles);
+  const removeAssets = useAssetStore((s) => s.removeAssets);
 
   const [garmentCategory, setGarmentCategory] = useState<GarmentAsset["category"]>("tops");
 
   const handleGarmentUpload = (files: File[]) => {
-    files.forEach((file) => {
-      const id = crypto.randomUUID();
-      const url = URL.createObjectURL(file);
-      addGarment({
-        id,
-        name: file.name.replace(/\.[^/.]+$/, ""),
-        thumbnailUrl: url,
-        originalUrl: url,
-        category: garmentCategory,
-        createdAt: new Date().toISOString(),
-      });
-    });
+    uploadFiles(files, "garments", garmentCategory);
   };
 
   const handleReferenceUpload = (files: File[]) => {
-    files.forEach((file) => {
-      const id = crypto.randomUUID();
-      const url = URL.createObjectURL(file);
-      addReference({
-        id,
-        name: file.name.replace(/\.[^/.]+$/, ""),
-        thumbnailUrl: url,
-        originalUrl: url,
-        createdAt: new Date().toISOString(),
-      });
-    });
+    uploadFiles(files, "references");
   };
 
   return (
@@ -124,7 +103,7 @@ export function LeftPanel() {
                         className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
-                          removeGarment(garment.id);
+                          removeAssets([garment.id]);
                         }}
                       >
                         <X className="h-3 w-3" />
@@ -173,7 +152,7 @@ export function LeftPanel() {
                         className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
-                          removeModel(model.id);
+                          removeAssets([model.id]);
                         }}
                       >
                         <X className="h-3 w-3" />
@@ -210,7 +189,7 @@ export function LeftPanel() {
                         variant="destructive"
                         size="icon"
                         className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
-                        onClick={() => removeReference(ref.id)}
+                        onClick={() => removeAssets([ref.id])}
                       >
                         <X className="h-3 w-3" />
                       </Button>
