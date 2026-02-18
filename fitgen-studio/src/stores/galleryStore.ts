@@ -171,6 +171,7 @@ export const useGalleryStore = create<GalleryState>()((set) => ({
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
+      .limit(200)
       .then(({ data, error }) => {
         if (error) {
           console.error("Failed to load generations:", error);

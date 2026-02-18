@@ -91,6 +91,8 @@ CREATE TABLE public.generations (
 CREATE INDEX idx_generations_user_id ON public.generations(user_id);
 CREATE INDEX idx_generations_project_id ON public.generations(project_id);
 CREATE INDEX idx_generations_created_at ON public.generations(created_at DESC);
+-- Composite index for the primary query pattern: WHERE user_id = ? ORDER BY created_at DESC
+CREATE INDEX idx_generations_user_created ON public.generations(user_id, created_at DESC);
 
 -- ============================================
 -- Usage Logs (track API usage per user)
