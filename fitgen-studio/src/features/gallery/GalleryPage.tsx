@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -116,6 +116,14 @@ export function GalleryPage() {
     closeDetail,
     deleteImages,
   } = useGalleryStore();
+
+  // Re-initialize if images are empty (e.g. initial load failed due to DB timeout)
+  const initialize = useGalleryStore((s) => s.initialize);
+  useEffect(() => {
+    if (images.length === 0 && !isLoading) {
+      initialize();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered and sorted images
   const filtered = useMemo(() => {

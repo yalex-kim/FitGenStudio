@@ -168,7 +168,7 @@ export const useGalleryStore = create<GalleryState>()((set) => ({
 
     supabase
       .from("generations")
-      .select("*")
+      .select("id, image_url, thumbnail_url, prompt_used, model_id, garment_id, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(200)
