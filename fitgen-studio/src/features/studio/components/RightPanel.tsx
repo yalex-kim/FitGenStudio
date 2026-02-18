@@ -218,7 +218,6 @@ export function RightPanel() {
   // A model image is available from either a saved model or a selected generated image
   const hasModelImage = !!(selectedModel || selectedGeneratedImage);
   const isSwapMode = !!(selectedGarmentId && hasModelImage);
-  const isVariationMode = !!(hasModelImage && !selectedGarmentId);
   const mapBodyType = (bt: string) => (bt === "plus" ? "plus-size" : bt);
   const mapBackground = (bg: string): string => {
     const bgMap: Record<string, string> = {
@@ -621,7 +620,7 @@ export function RightPanel() {
       case "model":
         return { label: "Generate Model", icon: Wand2, spinning: false };
       case "scene":
-        return { label: isVariationMode ? "Generate Variation" : "Generate Scene", icon: Camera, spinning: false };
+        return { label: "Generate Scene", icon: Camera, spinning: false };
       case "tryon":
         return { label: "Try On Garment", icon: ArrowRightLeft, spinning: false };
       default:
@@ -651,7 +650,8 @@ export function RightPanel() {
     if (studioStep === "model") {
       await executeGeneration();
     } else if (studioStep === "scene") {
-      if (isVariationMode) await executeVariation();
+      // Scene always uses variation when a model image exists
+      if (hasModelImage) await executeVariation();
       else await executeGeneration();
     } else if (studioStep === "tryon") {
       await executeSwap();
