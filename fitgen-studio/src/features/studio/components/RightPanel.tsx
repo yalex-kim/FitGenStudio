@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -46,6 +47,8 @@ import {
   Clapperboard,
   SlidersHorizontal,
   ArrowUpFromLine,
+  MessageSquareText,
+  Send,
 } from "lucide-react";
 
 const STYLE_PRESETS = [
@@ -187,9 +190,12 @@ export function RightPanel() {
   const garments = useAssetStore((s) => s.garments);
   const models = useAssetStore((s) => s.models);
 
+  const { isUpscaling, setIsUpscaling, isEditing, setIsEditing } = useStudioStore();
+
   const { user } = useAuthStore();
   const { canGenerate: hasCredits, getRemaining, getLimit, recordUsage } = useUsageStore();
   const [showLowCreditDialog, setShowLowCreditDialog] = useState(false);
+  const [customInstruction, setCustomInstruction] = useState("");
 
   const tier = user?.tier ?? "free";
   const remaining = getRemaining(tier);
@@ -507,6 +513,90 @@ export function RightPanel() {
     }
   };
 
+
+  const handleFineTuneEdit = async (editType: "background" | "shoes" | "custom", instruction: string) => {
+    if (!selectedGeneratedImage?.url || isEditing) return;
+    setIsEditing(true);
+    try {
+      const { base64, mimeType } = await imageUrlToBase64(selectedGeneratedImage.url);
+      const resp = await fetch("/api/generate/edit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": user?.id || "anonymous",
+          "x-user-tier": tier,
+        },
+        body: JSON.stringify({
+          imageBase64: base64,
+          imageMimeType: mimeType,
+          editType,
+          editInstruction: instruction,
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Edit failed" }));
+        throw new Error(err.error || `HTTP ${resp.status}`);
+      }
+      const result = await resp.json();
+      const userId = user?.id;
+      const editedUrl = await uploadBase64ToStorage(result.data.imageBase64, result.data.mimeType, userId);
+
+      const newImage = {
+        id: `edit-${Date.now()}`,
+        url: editedUrl,
+        thumbnailUrl: editedUrl,
+        prompt: `${editType}: ${instruction}`,
+        modelId: selectedGeneratedImage.modelId,
+        garmentId: selectedGeneratedImage.garmentId,
+        createdAt: new Date().toISOString(),
+        status: "completed" as const,
+      };
+      const imgs = useStudioStore.getState().generatedImages;
+      useStudioStore.getState().setGeneratedImages([...imgs, newImage]);
+      useStudioStore.getState().setSelectedImageIndex(imgs.length);
+      useGalleryStore.getState().addImages([newImage]);
+      toast.success("Edit applied!");
+    } catch (err: any) {
+      toast.error(err?.message || "Edit failed");
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
+  const handleUpscale = async () => {
+    if (!selectedGeneratedImage?.url || isUpscaling) return;
+    setIsUpscaling(true);
+    try {
+      const { base64, mimeType } = await imageUrlToBase64(selectedGeneratedImage.url);
+      const resp = await fetch("/api/upscale", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": user?.id ?? "anonymous",
+          "x-user-tier": tier,
+        },
+        body: JSON.stringify({ imageBase64: base64, mimeType }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Upscale failed" }));
+        throw new Error(err.error || "Upscale failed");
+      }
+      const result = await resp.json();
+      const userId = user?.id;
+      const upscaledUrl = await uploadBase64ToStorage(result.data.imageBase64, result.data.mimeType, userId);
+      const imgs = useStudioStore.getState().generatedImages;
+      useStudioStore.getState().setGeneratedImages(
+        imgs.map((img) =>
+          img.id === selectedGeneratedImage.id ? { ...img, url: upscaledUrl, thumbnailUrl: upscaledUrl } : img
+        )
+      );
+      toast.success("Image upscaled to 4K!");
+    } catch (err: any) {
+      toast.error(err?.message || "Upscale failed");
+    } finally {
+      setIsUpscaling(false);
+    }
+  };
 
   const studioStep = useStudioStore((s) => s.studioStep);
   const setStudioStep = useStudioStore((s) => s.setStudioStep);
@@ -876,6 +966,40 @@ export function RightPanel() {
                 </div>
               )}
 
+              {/* Custom Instruction */}
+              <div>
+                <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                  <MessageSquareText className="h-4 w-4" />
+                  Custom Instruction
+                </h3>
+                <p className="mb-2 text-[11px] text-muted-foreground">
+                  Describe what to change. The model's face and body will be preserved.
+                </p>
+                <Textarea
+                  placeholder="e.g. Change shoes to white sneakers, add a watch on the left wrist, make the background a rooftop at sunset..."
+                  value={customInstruction}
+                  onChange={(e) => setCustomInstruction(e.target.value)}
+                  className="min-h-[80px] text-xs resize-none"
+                  disabled={!selectedGeneratedImage || isEditing}
+                />
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="mt-2 w-full text-xs"
+                  disabled={!selectedGeneratedImage || !customInstruction.trim() || isEditing}
+                  onClick={() => handleFineTuneEdit("custom", customInstruction.trim())}
+                >
+                  {isEditing ? (
+                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Send className="mr-1.5 h-3 w-3" />
+                  )}
+                  {isEditing ? "Applying..." : "Apply Edit"}
+                </Button>
+              </div>
+
+              <Separator />
+
               <div>
                 <h3 className="mb-2 text-sm font-semibold">Upscale</h3>
                 <p className="mb-2 text-[11px] text-muted-foreground">
@@ -885,10 +1009,15 @@ export function RightPanel() {
                   variant="outline"
                   size="sm"
                   className="w-full text-xs"
-                  disabled={!selectedGeneratedImage}
+                  disabled={!selectedGeneratedImage || isUpscaling}
+                  onClick={handleUpscale}
                 >
-                  <ArrowUpFromLine className="mr-1.5 h-3 w-3" />
-                  Upscale to 4K
+                  {isUpscaling ? (
+                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  ) : (
+                    <ArrowUpFromLine className="mr-1.5 h-3 w-3" />
+                  )}
+                  {isUpscaling ? "Upscaling..." : "Upscale to 4K"}
                 </Button>
               </div>
 
@@ -903,9 +1032,14 @@ export function RightPanel() {
                   variant="outline"
                   size="sm"
                   className="w-full text-xs"
-                  disabled={!selectedGeneratedImage}
+                  disabled={!selectedGeneratedImage || isEditing}
+                  onClick={() => handleFineTuneEdit("custom", "Remove all unwanted wrinkles and creases from the clothing. Make the fabric look freshly pressed and smooth, like digital ironing. Keep everything else identical.")}
                 >
-                  <Wand2 className="mr-1.5 h-3 w-3" />
+                  {isEditing ? (
+                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Wand2 className="mr-1.5 h-3 w-3" />
+                  )}
                   Apply Digital Ironing
                 </Button>
               </div>
@@ -921,9 +1055,14 @@ export function RightPanel() {
                   variant="outline"
                   size="sm"
                   className="w-full text-xs"
-                  disabled={!selectedGeneratedImage}
+                  disabled={!selectedGeneratedImage || isEditing}
+                  onClick={() => handleFineTuneEdit("custom", "Add subtle, realistic natural fabric wrinkles and folds to the clothing for a more authentic, lived-in look. Keep everything else identical.")}
                 >
-                  <Wand2 className="mr-1.5 h-3 w-3" />
+                  {isEditing ? (
+                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Wand2 className="mr-1.5 h-3 w-3" />
+                  )}
                   Add Natural Wrinkles
                 </Button>
               </div>

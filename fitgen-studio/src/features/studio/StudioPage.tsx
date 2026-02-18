@@ -55,24 +55,24 @@ export function StudioPage() {
         <ResizablePanelGroup>
           <ResizablePanel
             id="left-panel"
-            defaultSize="20%"
-            minSize="15%"
-            maxSize="35%"
+            defaultSize="37%"
+            minSize="20%"
+            maxSize="50%"
             collapsible
             collapsedSize="0%"
           >
             <LeftPanel />
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel id="center-panel" defaultSize="55%" minSize="30%">
+          <ResizablePanel id="center-panel" defaultSize="40%" minSize="25%">
             <CenterPanel />
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel
             id="right-panel"
-            defaultSize="25%"
-            minSize="20%"
-            maxSize="40%"
+            defaultSize="23%"
+            minSize="18%"
+            maxSize="35%"
             collapsible
             collapsedSize="0%"
           >

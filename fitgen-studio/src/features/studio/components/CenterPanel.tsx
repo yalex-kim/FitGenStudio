@@ -1040,6 +1040,17 @@ export function CenterPanel() {
                         className="h-7 w-7 text-white hover:bg-white/20"
                         onClick={(e) => {
                           e.stopPropagation();
+                          handleSaveAsReference(image);
+                        }}
+                      >
+                        <Palette className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-white hover:bg-white/20"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handleDownload(image);
                         }}
                       >
