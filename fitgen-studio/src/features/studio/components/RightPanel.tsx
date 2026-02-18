@@ -49,6 +49,9 @@ import {
   ArrowUpFromLine,
   MessageSquareText,
   Send,
+  X,
+  Palette,
+  Users,
 } from "lucide-react";
 
 const STYLE_PRESETS = [
@@ -172,7 +175,11 @@ export function RightPanel() {
     framing,
     setFraming,
     selectedGarmentId,
+    selectGarment,
     selectedModelId,
+    selectModel,
+    selectReference,
+    setLeftTab,
     generatedImages,
     selectedImageIndex,
     isGenerating,
@@ -775,14 +782,82 @@ export function RightPanel() {
           {/* ===== STEP: Scene Direction ===== */}
           {studioStep === "scene" && (
             <>
-              {!hasModelImage && (
-                <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4 text-center">
-                  <User className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-xs text-muted-foreground">
-                    Select a model from the left panel first, or generate one in Step 1.
-                  </p>
-                </div>
-              )}
+              {/* Selected Model */}
+              <div>
+                <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                  <Users className="h-4 w-4" />
+                  Model
+                </h3>
+                {selectedModel ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2">
+                    <img
+                      src={selectedModel.thumbnailUrl}
+                      alt={selectedModel.name}
+                      className="h-14 w-10 shrink-0 rounded object-cover"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-xs font-medium">{selectedModel.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{selectedModel.gender ?? ""} model</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => selectModel(null)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setLeftTab("models")}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-3 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                  >
+                    <User className="h-4 w-4" />
+                    Select a model
+                  </button>
+                )}
+              </div>
+
+              {/* Selected Reference */}
+              <div>
+                <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                  <Palette className="h-4 w-4" />
+                  Reference
+                  <span className="text-[10px] font-normal text-muted-foreground">(optional)</span>
+                </h3>
+                {selectedReference ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2">
+                    <img
+                      src={selectedReference.thumbnailUrl}
+                      alt={selectedReference.name}
+                      className="h-10 w-10 shrink-0 rounded object-cover"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-xs font-medium">{selectedReference.name}</p>
+                      <p className="text-[10px] text-muted-foreground">Mood & atmosphere</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => selectReference(null)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setLeftTab("reference")}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-3 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                  >
+                    <Palette className="h-4 w-4" />
+                    Select a reference
+                  </button>
+                )}
+              </div>
+
+              <Separator />
 
               <div>
                 <h3 className="mb-2 text-sm font-semibold">Pose & Camera</h3>
@@ -862,67 +937,85 @@ export function RightPanel() {
                 </div>
               </div>
 
-              {selectedReference && (
-                <>
-                  <Separator />
-                  <div>
-                    <h3 className="mb-2 text-sm font-semibold">Reference</h3>
-                    <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-2">
-                      <img
-                        src={selectedReference.thumbnailUrl}
-                        alt={selectedReference.name}
-                        className="h-12 w-12 rounded object-cover"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-xs font-medium">{selectedReference.name}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          Mood, pose, and atmosphere will be matched
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
             </>
           )}
 
           {/* ===== STEP: Virtual Try-On ===== */}
           {studioStep === "tryon" && (
             <>
-              {!hasModelImage && (
-                <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4 text-center">
-                  <User className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-xs text-muted-foreground">
-                    Select a model from the left panel or generate one first.
-                  </p>
-                </div>
-              )}
+              {/* Selected Model */}
+              <div>
+                <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                  <Users className="h-4 w-4" />
+                  Model
+                </h3>
+                {selectedModel ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2">
+                    <img
+                      src={selectedModel.thumbnailUrl}
+                      alt={selectedModel.name}
+                      className="h-14 w-10 shrink-0 rounded object-cover"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-xs font-medium">{selectedModel.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{selectedModel.gender ?? ""} model</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => selectModel(null)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setLeftTab("models")}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-3 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                  >
+                    <User className="h-4 w-4" />
+                    Select a model
+                  </button>
+                )}
+              </div>
 
-              {!selectedGarment && (
-                <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4 text-center">
-                  <Shirt className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-xs text-muted-foreground">
-                    Upload a garment in the Product tab to try on.
-                  </p>
-                </div>
-              )}
-
-              {selectedGarment && (
-                <div>
-                  <h3 className="mb-2 text-sm font-semibold">Selected Garment</h3>
-                  <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-2">
+              {/* Selected Product / Garment */}
+              <div>
+                <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+                  <Shirt className="h-4 w-4" />
+                  Product
+                </h3>
+                {selectedGarment ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2">
                     <img
                       src={selectedGarment.thumbnailUrl}
                       alt={selectedGarment.name}
-                      className="h-12 w-12 rounded object-cover"
+                      className="h-10 w-10 shrink-0 rounded object-cover"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-xs font-medium">{selectedGarment.name}</p>
                       <Badge variant="secondary" className="text-[10px]">{selectedGarment.category}</Badge>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0"
+                      onClick={() => selectGarment(null)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <button
+                    onClick={() => setLeftTab("product")}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-3 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                  >
+                    <Shirt className="h-4 w-4" />
+                    Upload or select a product
+                  </button>
+                )}
+              </div>
 
               <Separator />
 

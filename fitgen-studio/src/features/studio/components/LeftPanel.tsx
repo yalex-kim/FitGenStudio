@@ -32,12 +32,6 @@ export function LeftPanel() {
 
   const [garmentCategory, setGarmentCategory] = useState<GarmentAsset["category"]>("tops");
 
-  // Resolve selected assets for the selection summary bar
-  const selectedGarment = garments.find((g) => g.id === selectedGarmentId) ?? null;
-  const selectedModel = models.find((m) => m.id === selectedModelId) ?? null;
-  const selectedReference = references.find((r) => r.id === selectedReferenceId) ?? null;
-  const hasSelection = !!(selectedGarment || selectedModel || selectedReference);
-
   const handleGarmentUpload = (files: File[]) => {
     uploadFiles(files, "garments", garmentCategory);
   };
@@ -57,21 +51,21 @@ export function LeftPanel() {
           <TabsTrigger value="product" className="relative gap-1 text-xs">
             <Shirt className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Product</span>
-            {selectedGarment && (
+            {selectedGarmentId && (
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
             )}
           </TabsTrigger>
           <TabsTrigger value="models" className="relative gap-1 text-xs">
             <Users className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Models</span>
-            {selectedModel && (
+            {selectedModelId && (
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
             )}
           </TabsTrigger>
           <TabsTrigger value="reference" className="relative gap-1 text-xs">
             <Palette className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Reference</span>
-            {selectedReference && (
+            {selectedReferenceId && (
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
             )}
           </TabsTrigger>
@@ -253,143 +247,6 @@ export function LeftPanel() {
         </TabsContent>
       </Tabs>
 
-      {/* Selection summary bar — always visible at bottom */}
-      {hasSelection && (
-        <div className="shrink-0 border-t border-border bg-muted/50 px-3 py-2">
-          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            Selected
-          </p>
-          <div className="flex items-center gap-2">
-            {/* Selected garment */}
-            <div
-              className={cn(
-                "flex flex-1 items-center gap-2 rounded-md border p-1.5 transition-colors",
-                selectedGarment
-                  ? "border-primary/50 bg-primary/5 cursor-pointer"
-                  : "border-dashed border-muted-foreground/25"
-              )}
-              onClick={() => {
-                if (selectedGarment) setLeftTab("product");
-              }}
-            >
-              {selectedGarment ? (
-                <>
-                  <img
-                    src={selectedGarment.thumbnailUrl}
-                    alt={selectedGarment.name}
-                    className="h-8 w-8 shrink-0 rounded object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[10px] font-medium">
-                      {selectedGarment.name}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      <Shirt className="mr-0.5 inline h-2.5 w-2.5" />
-                      Product
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5 shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      selectGarment(null);
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </>
-              ) : (
-                <p className="w-full text-center text-[10px] text-muted-foreground">
-                  No product
-                </p>
-              )}
-            </div>
-
-            {/* Selected model */}
-            <div
-              className={cn(
-                "flex flex-1 items-center gap-2 rounded-md border p-1.5 transition-colors",
-                selectedModel
-                  ? "border-primary/50 bg-primary/5 cursor-pointer"
-                  : "border-dashed border-muted-foreground/25"
-              )}
-              onClick={() => {
-                if (selectedModel) setLeftTab("models");
-              }}
-            >
-              {selectedModel ? (
-                <>
-                  <img
-                    src={selectedModel.thumbnailUrl}
-                    alt={selectedModel.name}
-                    className="h-8 w-8 shrink-0 rounded object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[10px] font-medium">
-                      {selectedModel.name}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      <Users className="mr-0.5 inline h-2.5 w-2.5" />
-                      Model
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5 shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      selectModel(null);
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </>
-              ) : (
-                <p className="w-full text-center text-[10px] text-muted-foreground">
-                  No model
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Selected reference */}
-          {selectedReference && (
-            <div
-              className="mt-1.5 flex items-center gap-2 rounded-md border border-primary/50 bg-primary/5 p-1.5 cursor-pointer"
-              onClick={() => setLeftTab("reference")}
-            >
-              <img
-                src={selectedReference.thumbnailUrl}
-                alt={selectedReference.name}
-                className="h-8 w-8 shrink-0 rounded object-cover"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[10px] font-medium">
-                  {selectedReference.name}
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  <Palette className="mr-0.5 inline h-2.5 w-2.5" />
-                  Reference
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  selectReference(null);
-                }}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
