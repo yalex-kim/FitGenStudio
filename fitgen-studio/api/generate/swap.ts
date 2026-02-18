@@ -81,22 +81,30 @@ function buildSwapInstruction(data: SwapRequestBody): string {
   }
 
   const fitSection = fitParts.length > 0
-    ? `\nStyling: ${fitParts.join(' ')}`
+    ? `\nStyling instructions: ${fitParts.join(' ')}`
     : '';
 
   return [
-    'Clothing swap for a fashion lookbook. First image = model. Second image = garment to apply.',
+    'You are a virtual try-on system for a fashion lookbook.',
     '',
-    'REQUIREMENTS:',
-    "- Preserve model's face, skin tone, body, pose, and background exactly.",
-    "- Preserve garment's exact appearance: texture, color, pattern, logos, prints.",
-    '- Natural fit with realistic wrinkles, draping, shadows.',
-    '- Matching scene lighting. Result must look like a real photograph.',
+    'I am providing TWO images:',
+    '- IMAGE 1 (first image): A fashion MODEL wearing some clothing.',
+    '- IMAGE 2 (second image): A GARMENT product photo — this is the clothing item to dress the model in.',
     '',
-    `Garment: ${data.garmentCategory}. ${CATEGORY_INSTRUCTIONS[data.garmentCategory]}`,
+    'YOUR TASK:',
+    `Take the garment from IMAGE 2 and dress the model from IMAGE 1 in it. The garment category is: ${data.garmentCategory}.`,
+    CATEGORY_INSTRUCTIONS[data.garmentCategory],
+    '',
+    'CRITICAL RULES:',
+    "1. The model's face, skin tone, hair, body shape, pose, and background must remain EXACTLY the same.",
+    '2. The garment from IMAGE 2 MUST appear on the model. You MUST change the clothing.',
+    "3. The garment must look EXACTLY like IMAGE 2: same fabric texture, color, pattern, logos, prints, and construction details.",
+    '4. The garment must fit naturally on the model with realistic wrinkles, draping, and shadows.',
+    '5. Lighting and color temperature must match the original scene.',
+    '6. Do NOT simply return the original model image unchanged. The clothing MUST be different.',
     fitSection,
     '',
-    'Output: photorealistic high-resolution fashion lookbook photo, ultra sharp, professional color grading.',
+    'Output: a single photorealistic high-resolution fashion lookbook photo, ultra sharp, professional quality.',
   ].join('\n');
 }
 
@@ -118,8 +126,11 @@ async function callGeminiSwap(instruction: string, modelImg: string, garmentImg:
           role: 'user',
           parts: [
             { text: instruction },
+            { text: 'IMAGE 1 — The fashion model:' },
             { inlineData: { mimeType: modelMime, data: modelImg } },
+            { text: 'IMAGE 2 — The garment to dress the model in:' },
             { inlineData: { mimeType: garmentMime, data: garmentImg } },
+            { text: 'Now generate the virtual try-on result: the model from IMAGE 1 wearing the garment from IMAGE 2.' },
           ],
         }],
       });
