@@ -167,11 +167,7 @@ export const useGalleryStore = create<GalleryState>()((set) => ({
     set({ isLoading: true });
 
     supabase
-      .from("generations")
-      .select("id, image_url, thumbnail_url, prompt_used, model_id, garment_id, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(200)
+      .rpc("get_user_generations", { p_user_id: userId, p_limit: 200 })
       .then(({ data, error }) => {
         if (error) {
           console.error("Failed to load generations:", error);
