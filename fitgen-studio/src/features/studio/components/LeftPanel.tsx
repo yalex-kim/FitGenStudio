@@ -18,7 +18,7 @@ export function LeftPanel() {
   const {
     leftTab,
     setLeftTab,
-    selectedGarmentId,
+    selectedGarmentIds,
     selectGarment,
     selectedModelId,
     selectModel,
@@ -125,7 +125,7 @@ export function LeftPanel() {
           <TabsTrigger value="product" className="relative gap-1 text-xs">
             <Shirt className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Product</span>
-            {selectedGarmentId && (
+            {selectedGarmentIds.size > 0 && (
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
             )}
           </TabsTrigger>
@@ -171,52 +171,62 @@ export function LeftPanel() {
                 onFilesAccepted={handleGarmentUpload}
                 label="Drop garment images"
               />
-              {garments.length > 0 && (
-                <div className="grid grid-cols-2 gap-2">
-                  {garments.map((garment) => (
-                    <div
-                      key={garment.id}
-                      className={cn(
-                        "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-colors",
-                        selectedGarmentId === garment.id
-                          ? "border-primary ring-2 ring-primary/20"
-                          : "border-transparent hover:border-muted-foreground/25"
-                      )}
-                      onClick={() => {
-                        if (isFinetune) {
-                          addToCanvasAndSelect(assetToCanvasImage(garment.id, garment.originalUrl, garment.thumbnailUrl, garment.name));
-                        } else {
-                          selectGarment(selectedGarmentId === garment.id ? null : garment.id);
-                        }
-                      }}
-                    >
-                      <img
-                        src={garment.thumbnailUrl}
-                        alt={garment.name}
-                        className="aspect-square w-full object-cover"
-                      />
-                      {!isFinetune && selectedGarmentId === garment.id && (
-                        <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                          <Check className="h-3 w-3" />
+              {garments.length > 0 && (() => {
+                const filtered = garments.filter((g) => g.category === garmentCategory);
+                return filtered.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {filtered.map((garment) => {
+                      const isSelected = selectedGarmentIds.get(garment.category) === garment.id;
+                      return (
+                        <div
+                          key={garment.id}
+                          className={cn(
+                            "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-colors",
+                            isSelected
+                              ? "border-primary ring-2 ring-primary/20"
+                              : "border-transparent hover:border-muted-foreground/25"
+                          )}
+                          onClick={() => {
+                            if (isFinetune) {
+                              addToCanvasAndSelect(assetToCanvasImage(garment.id, garment.originalUrl, garment.thumbnailUrl, garment.name));
+                            } else {
+                              selectGarment(isSelected ? null : garment.id, garment.category);
+                            }
+                          }}
+                        >
+                          <img
+                            src={garment.thumbnailUrl}
+                            alt={garment.name}
+                            className="aspect-square w-full object-cover"
+                          />
+                          {!isFinetune && isSelected && (
+                            <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                              <Check className="h-3 w-3" />
+                            </div>
+                          )}
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isSelected) selectGarment(null, garment.category);
+                              removeAssets([garment.id]);
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                          <p className="truncate p-1 text-xs">{garment.name}</p>
                         </div>
-                      )}
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (selectedGarmentId === garment.id) selectGarment(null);
-                          removeAssets([garment.id]);
-                        }}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                      <p className="truncate p-1 text-xs">{garment.name}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="py-4 text-center text-xs text-muted-foreground">
+                    No {garmentCategory} uploaded yet
+                  </p>
+                );
+              })()}
             </div>
           </ScrollArea>
         </TabsContent>

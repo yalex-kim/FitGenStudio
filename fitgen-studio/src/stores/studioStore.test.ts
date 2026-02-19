@@ -6,7 +6,7 @@ describe('studioStore', () => {
     useStudioStore.setState({
       leftTab: 'product',
       garments: [],
-      selectedGarmentId: null,
+      selectedGarmentIds: new Map<string, string>(),
       models: [],
       selectedModelId: null,
       references: [],
@@ -63,15 +63,43 @@ describe('studioStore', () => {
       expect(useStudioStore.getState().garments).toHaveLength(0);
     });
 
-    it('should select a garment', () => {
-      useStudioStore.getState().selectGarment('g1');
-      expect(useStudioStore.getState().selectedGarmentId).toBe('g1');
+    it('should select a garment by category', () => {
+      useStudioStore.getState().selectGarment('g1', 'tops');
+      expect(useStudioStore.getState().selectedGarmentIds.get('tops')).toBe('g1');
     });
 
-    it('should deselect a garment', () => {
-      useStudioStore.getState().selectGarment('g1');
-      useStudioStore.getState().selectGarment(null);
-      expect(useStudioStore.getState().selectedGarmentId).toBeNull();
+    it('should deselect a garment by category', () => {
+      useStudioStore.getState().selectGarment('g1', 'tops');
+      useStudioStore.getState().selectGarment(null, 'tops');
+      expect(useStudioStore.getState().selectedGarmentIds.has('tops')).toBe(false);
+    });
+
+    it('should select garments from different categories', () => {
+      useStudioStore.getState().selectGarment('g1', 'tops');
+      useStudioStore.getState().selectGarment('g2', 'bottoms');
+      const ids = useStudioStore.getState().selectedGarmentIds;
+      expect(ids.get('tops')).toBe('g1');
+      expect(ids.get('bottoms')).toBe('g2');
+      expect(ids.size).toBe(2);
+    });
+
+    it('should replace garment within same category', () => {
+      useStudioStore.getState().selectGarment('g1', 'tops');
+      useStudioStore.getState().selectGarment('g3', 'tops');
+      expect(useStudioStore.getState().selectedGarmentIds.get('tops')).toBe('g3');
+    });
+
+    it('should toggle garment off when clicking same one', () => {
+      useStudioStore.getState().selectGarment('g1', 'tops');
+      useStudioStore.getState().selectGarment('g1', 'tops');
+      expect(useStudioStore.getState().selectedGarmentIds.has('tops')).toBe(false);
+    });
+
+    it('should clear all garments', () => {
+      useStudioStore.getState().selectGarment('g1', 'tops');
+      useStudioStore.getState().selectGarment('g2', 'bottoms');
+      useStudioStore.getState().clearGarments();
+      expect(useStudioStore.getState().selectedGarmentIds.size).toBe(0);
     });
   });
 

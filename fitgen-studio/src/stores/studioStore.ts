@@ -15,8 +15,9 @@ export interface StudioState {
   garments: GarmentAsset[];
   addGarment: (garment: GarmentAsset) => void;
   removeGarment: (id: string) => void;
-  selectedGarmentId: string | null;
-  selectGarment: (id: string | null) => void;
+  selectedGarmentIds: Map<string, string>; // category → garmentId
+  selectGarment: (id: string | null, category?: string) => void;
+  clearGarments: () => void;
   models: ModelAsset[];
   addModel: (model: ModelAsset) => void;
   removeModel: (id: string) => void;
@@ -104,8 +105,23 @@ export const useStudioStore = create<StudioState>()((set) => ({
     set((state) => ({ garments: [...state.garments, garment] })),
   removeGarment: (id) =>
     set((state) => ({ garments: state.garments.filter((g) => g.id !== id) })),
-  selectedGarmentId: null,
-  selectGarment: (id) => set({ selectedGarmentId: id }),
+  selectedGarmentIds: new Map<string, string>(),
+  selectGarment: (id, category) =>
+    set((state) => {
+      const next = new Map(state.selectedGarmentIds);
+      if (id === null && category) {
+        next.delete(category);
+      } else if (id !== null && category) {
+        // Same garment clicked again → deselect
+        if (next.get(category) === id) {
+          next.delete(category);
+        } else {
+          next.set(category, id);
+        }
+      }
+      return { selectedGarmentIds: next };
+    }),
+  clearGarments: () => set({ selectedGarmentIds: new Map<string, string>() }),
   models: [],
   addModel: (model) =>
     set((state) => ({ models: [...state.models, model] })),

@@ -297,6 +297,7 @@ export function AssetLibraryPage() {
   }, [initialize]);
 
   const [garmentCategory, setGarmentCategory] = useState<GarmentAsset["category"]>("tops");
+  const [garmentFilterCategory, setGarmentFilterCategory] = useState<GarmentAsset["category"] | "all">("all");
   const [renameDialog, setRenameDialog] = useState<{
     id: string;
     name: string;
@@ -305,17 +306,22 @@ export function AssetLibraryPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
 
   const currentItems = useMemo(() => {
-    const items =
+    let items: AnyAsset[] =
       activeCategory === "models"
         ? models
         : activeCategory === "garments"
           ? garments
           : references;
 
+    // Apply category filter for garments
+    if (activeCategory === "garments" && garmentFilterCategory !== "all") {
+      items = (items as GarmentAsset[]).filter((g) => g.category === garmentFilterCategory);
+    }
+
     if (!searchQuery.trim()) return items;
     const q = searchQuery.toLowerCase();
     return items.filter((item) => item.name.toLowerCase().includes(q));
-  }, [activeCategory, models, garments, references, searchQuery]);
+  }, [activeCategory, models, garments, references, searchQuery, garmentFilterCategory]);
 
   const handleUpload = useCallback(
     async (files: File[]) => {
@@ -472,18 +478,33 @@ export function AssetLibraryPage() {
         {activeCategory !== "models" && (
           <div className="mt-4 space-y-3">
             {activeCategory === "garments" && (
-              <Select value={garmentCategory} onValueChange={(v) => setGarmentCategory(v as GarmentAsset["category"])}>
-                <SelectTrigger className="h-9 w-48">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tops">Tops</SelectItem>
-                  <SelectItem value="outerwear">Outerwear</SelectItem>
-                  <SelectItem value="bottoms">Bottoms</SelectItem>
-                  <SelectItem value="dresses">Dresses</SelectItem>
-                  <SelectItem value="accessories">Accessories</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-3">
+                <Select value={garmentCategory} onValueChange={(v) => setGarmentCategory(v as GarmentAsset["category"])}>
+                  <SelectTrigger className="h-9 w-48">
+                    <SelectValue placeholder="Upload category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tops">Upload as: Tops</SelectItem>
+                    <SelectItem value="outerwear">Upload as: Outerwear</SelectItem>
+                    <SelectItem value="bottoms">Upload as: Bottoms</SelectItem>
+                    <SelectItem value="dresses">Upload as: Dresses</SelectItem>
+                    <SelectItem value="accessories">Upload as: Accessories</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={garmentFilterCategory} onValueChange={(v) => setGarmentFilterCategory(v as GarmentAsset["category"] | "all")}>
+                  <SelectTrigger className="h-9 w-48">
+                    <SelectValue placeholder="Filter by category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Show: All</SelectItem>
+                    <SelectItem value="tops">Show: Tops</SelectItem>
+                    <SelectItem value="outerwear">Show: Outerwear</SelectItem>
+                    <SelectItem value="bottoms">Show: Bottoms</SelectItem>
+                    <SelectItem value="dresses">Show: Dresses</SelectItem>
+                    <SelectItem value="accessories">Show: Accessories</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             )}
             <UploadZone
               category={activeCategory}

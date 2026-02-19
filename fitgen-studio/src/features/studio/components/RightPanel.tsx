@@ -174,7 +174,7 @@ export function RightPanel() {
     setCameraAngle,
     framing,
     setFraming,
-    selectedGarmentId,
+    selectedGarmentIds,
     selectGarment,
     selectedModelId,
     selectModel,
@@ -218,7 +218,9 @@ export function RightPanel() {
 
 
   // Determine mode: model+garment = Swap, model-only = Variation, else = Model Generation
-  const selectedGarment = garments.find((g) => g.id === selectedGarmentId);
+  const selectedGarments = garments.filter(
+    (g) => selectedGarmentIds.get(g.category) === g.id
+  );
   const selectedModel = models.find((m) => m.id === selectedModelId);
   const selectedReference = references.find((r) => r.id === selectedReferenceId);
   const selectedGeneratedImage =
@@ -226,7 +228,7 @@ export function RightPanel() {
 
   // A model image is available from either a saved model or a selected generated image
   const hasModelImage = !!(selectedModel || selectedGeneratedImage);
-  const isSwapMode = !!(selectedGarmentId && hasModelImage);
+  const isSwapMode = !!(selectedGarmentIds.size > 0 && hasModelImage);
   const mapBodyType = (bt: string) => (bt === "plus" ? "plus-size" : bt);
   const mapBackground = (bg: string): string => {
     const bgMap: Record<string, string> = {
@@ -321,7 +323,7 @@ export function RightPanel() {
       const images = await apiResultsToImages(
         fulfilled.map((r) => r.value),
         selectedModelId || "",
-        selectedGarmentId || undefined,
+        undefined,
       );
 
       setGenerationProgress(100);
@@ -339,7 +341,7 @@ export function RightPanel() {
   };
 
   const executeSwap = async () => {
-    if (!selectedGarment) return;
+    if (selectedGarments.length === 0) return;
 
     // Resolve the model image URL
     const modelImageUrl = selectedModel?.imageUrl ?? selectedGeneratedImage?.url;
@@ -355,21 +357,32 @@ export function RightPanel() {
     try {
       setGenerationProgress(10);
 
-      const [modelData, garmentData] = await Promise.all([
+      const [modelData, ...garmentDataArr] = await Promise.all([
         imageUrlToBase64(modelImageUrl),
-        imageUrlToBase64(selectedGarment.originalUrl),
+        ...selectedGarments.map((g) => imageUrlToBase64(g.originalUrl)),
       ]);
 
       setGenerationProgress(20);
 
-      const swapBody = {
+      const swapBody: Record<string, unknown> = {
         modelImageBase64: modelData.base64,
-        garmentImageBase64: garmentData.base64,
-        garmentCategory: selectedGarment.category,
         modelMimeType: modelData.mimeType,
-        garmentMimeType: garmentData.mimeType,
         fitOptions: { tuckIn, sleeveRoll, buttonOpen, autoCoordination },
       };
+
+      if (selectedGarments.length === 1) {
+        // Single garment — backwards-compatible
+        swapBody.garmentImageBase64 = garmentDataArr[0].base64;
+        swapBody.garmentCategory = selectedGarments[0].category;
+        swapBody.garmentMimeType = garmentDataArr[0].mimeType;
+      } else {
+        // Multi garment
+        swapBody.garments = selectedGarments.map((g, i) => ({
+          imageBase64: garmentDataArr[i].base64,
+          mimeType: garmentDataArr[i].mimeType,
+          category: g.category,
+        }));
+      }
 
       // Generate 4 swap variations in parallel
       const promises = Array.from({ length: 4 }, () =>
@@ -405,10 +418,11 @@ export function RightPanel() {
         throw new Error(firstError?.reason?.message || "All swap generations failed");
       }
 
+      const garmentIdStr = selectedGarments.map((g) => g.id).join(",");
       const images = await apiResultsToImages(
         fulfilled.map((r) => r.value),
         selectedModelId || selectedGeneratedImage?.id || "",
-        selectedGarmentId || undefined,
+        garmentIdStr || undefined,
       );
 
       setGenerationProgress(100);
@@ -984,31 +998,38 @@ export function RightPanel() {
                 )}
               </div>
 
-              {/* Selected Product / Garment */}
+              {/* Selected Products / Garments */}
               <div>
                 <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
                   <Shirt className="h-4 w-4" />
-                  Product
+                  Products
+                  {selectedGarments.length > 0 && (
+                    <Badge variant="secondary" className="text-[10px]">{selectedGarments.length}</Badge>
+                  )}
                 </h3>
-                {selectedGarment ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2">
-                    <img
-                      src={selectedGarment.thumbnailUrl}
-                      alt={selectedGarment.name}
-                      className="h-10 w-10 shrink-0 rounded object-cover"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-xs font-medium">{selectedGarment.name}</p>
-                      <Badge variant="secondary" className="text-[10px]">{selectedGarment.category}</Badge>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0"
-                      onClick={() => selectGarment(null)}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
+                {selectedGarments.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedGarments.map((garment) => (
+                      <div key={garment.id} className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2">
+                        <img
+                          src={garment.thumbnailUrl}
+                          alt={garment.name}
+                          className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-xs font-medium">{garment.name}</p>
+                          <Badge variant="secondary" className="text-[10px]">{garment.category}</Badge>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => selectGarment(null, garment.category)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <button
