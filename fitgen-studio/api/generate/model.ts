@@ -195,7 +195,7 @@ function buildPrompt(params: ModelRequestBody): string {
     `Background: ${bgMap[params.background]}`,
     `Lighting: ${lightMap[params.lighting]}`,
     '',
-    'The model should wear simple neutral clothing (plain white t-shirt and jeans). Focus on realistic body proportions, facial features, and pose.',
+    'The model should wear simple neutral clothing (plain white t-shirt and black shorts). Focus on realistic body proportions, facial features, and pose.',
     '',
     'Ultra high resolution, 8K quality, sharp focus, professional color grading, fashion magazine quality. Shot with 85mm lens.',
   ].join('\n');

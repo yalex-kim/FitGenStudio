@@ -116,7 +116,7 @@ export function buildModelPrompt(params: ModelGenerationParams): string {
     '',
     `Lighting: ${lightingDesc}`,
     '',
-    'The model should be wearing simple, neutral clothing (plain white t-shirt and jeans or similar) as the clothing will be swapped in a subsequent step. Focus on generating a realistic model with the correct body proportions, facial features, and pose.',
+    'The model should be wearing simple, neutral clothing (plain white t-shirt and black shorts) as the clothing will be swapped in a subsequent step. Focus on generating a realistic model with the correct body proportions, facial features, and pose.',
     '',
     QUALITY_SUFFIX,
   ];
