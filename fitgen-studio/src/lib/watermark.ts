@@ -5,6 +5,7 @@ import type { Tier } from "@/lib/usageLimits";
  * Free-tier users get a visible "FitGen Studio" overlay on downloads.
  */
 export function shouldApplyVisibleWatermark(tier: Tier): boolean {
+  if (import.meta.env.VITE_BYPASS_CREDITS === "true") return false;
   return tier === "free";
 }
 
