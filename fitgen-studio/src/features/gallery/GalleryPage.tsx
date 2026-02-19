@@ -101,6 +101,8 @@ export function GalleryPage() {
   const {
     images,
     isLoading,
+    isLoadingMore,
+    hasMore,
     sortBy,
     setSortBy,
     filterStyle,
@@ -115,6 +117,7 @@ export function GalleryPage() {
     openDetail,
     closeDetail,
     deleteImages,
+    loadMore,
   } = useGalleryStore();
 
   // Re-initialize if images are empty (e.g. initial load failed due to DB timeout)
@@ -535,7 +538,19 @@ export function GalleryPage() {
       )}
 
       {images.length > 0 && (
-        <div className="flex justify-center py-4">
+        <div className="flex flex-col items-center gap-3 py-4">
+          {hasMore && (
+            <Button
+              variant="outline"
+              onClick={loadMore}
+              disabled={isLoadingMore}
+            >
+              {isLoadingMore ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {isLoadingMore ? "Loading..." : "Load More"}
+            </Button>
+          )}
           <p className="text-sm text-muted-foreground">
             {images.length} image{images.length !== 1 ? "s" : ""} in gallery
           </p>
