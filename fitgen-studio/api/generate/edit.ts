@@ -105,6 +105,11 @@ async function callGeminiEdit(imageBase64: string, mimeType: string, prompt: str
             { inlineData: { mimeType, data: imageBase64 } },
           ],
         }],
+        config: {
+          imageConfig: {
+            imageSize: '1K' as const,
+          },
+        },
       });
 
       const parts = response.candidates?.[0]?.content?.parts;

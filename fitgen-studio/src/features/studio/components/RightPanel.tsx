@@ -206,6 +206,7 @@ export function RightPanel() {
   const [showLowCreditDialog, setShowLowCreditDialog] = useState(false);
   const [customInstruction, setCustomInstruction] = useState("");
   const [showGalleryPicker, setShowGalleryPicker] = useState(false);
+  const [editingAction, setEditingAction] = useState<string | null>(null);
 
   const tier = user?.tier ?? "free";
   const remaining = getRemaining(tier);
@@ -529,9 +530,10 @@ export function RightPanel() {
   };
 
 
-  const handleFineTuneEdit = async (editType: "background" | "shoes" | "custom", instruction: string) => {
+  const handleFineTuneEdit = async (editType: "background" | "shoes" | "custom", instruction: string, actionId: string) => {
     if (!selectedGeneratedImage?.url || isEditing) return;
     setIsEditing(true);
+    setEditingAction(actionId);
     try {
       const { base64, mimeType } = await imageUrlToBase64(selectedGeneratedImage.url);
       const resp = await fetch("/api/generate/edit", {
@@ -575,6 +577,7 @@ export function RightPanel() {
       toast.error(err?.message || "Edit failed");
     } finally {
       setIsEditing(false);
+      setEditingAction(null);
     }
   };
 
@@ -1133,14 +1136,14 @@ export function RightPanel() {
                   size="sm"
                   className="mt-2 w-full text-xs"
                   disabled={!selectedGeneratedImage || !customInstruction.trim() || isEditing}
-                  onClick={() => handleFineTuneEdit("custom", customInstruction.trim())}
+                  onClick={() => handleFineTuneEdit("custom", customInstruction.trim(), "custom")}
                 >
-                  {isEditing ? (
+                  {editingAction === "custom" ? (
                     <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                   ) : (
                     <Send className="mr-1.5 h-3 w-3" />
                   )}
-                  {isEditing ? "Applying..." : "Apply Edit"}
+                  {editingAction === "custom" ? "Applying..." : "Apply Edit"}
                 </Button>
               </div>
 
@@ -1179,14 +1182,14 @@ export function RightPanel() {
                   size="sm"
                   className="w-full text-xs"
                   disabled={!selectedGeneratedImage || isEditing}
-                  onClick={() => handleFineTuneEdit("custom", "Remove all unwanted wrinkles and creases from the clothing. Make the fabric look freshly pressed and smooth, like digital ironing. Keep everything else identical.")}
+                  onClick={() => handleFineTuneEdit("custom", "Remove all unwanted wrinkles and creases from the clothing. Make the fabric look freshly pressed and smooth, like digital ironing. Keep everything else identical.", "ironing")}
                 >
-                  {isEditing ? (
+                  {editingAction === "ironing" ? (
                     <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                   ) : (
                     <Wand2 className="mr-1.5 h-3 w-3" />
                   )}
-                  Apply Digital Ironing
+                  {editingAction === "ironing" ? "Ironing..." : "Apply Digital Ironing"}
                 </Button>
               </div>
 
@@ -1202,14 +1205,14 @@ export function RightPanel() {
                   size="sm"
                   className="w-full text-xs"
                   disabled={!selectedGeneratedImage || isEditing}
-                  onClick={() => handleFineTuneEdit("custom", "Add subtle, realistic natural fabric wrinkles and folds to the clothing for a more authentic, lived-in look. Keep everything else identical.")}
+                  onClick={() => handleFineTuneEdit("custom", "Add subtle, realistic natural fabric wrinkles and folds to the clothing for a more authentic, lived-in look. Keep everything else identical.", "wrinkles")}
                 >
-                  {isEditing ? (
+                  {editingAction === "wrinkles" ? (
                     <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                   ) : (
                     <Wand2 className="mr-1.5 h-3 w-3" />
                   )}
-                  Add Natural Wrinkles
+                  {editingAction === "wrinkles" ? "Adding Wrinkles..." : "Add Natural Wrinkles"}
                 </Button>
               </div>
 

@@ -133,6 +133,11 @@ async function callGeminiSwap(instruction: string, modelImg: string, garmentImg:
             { text: 'Now generate the virtual try-on result: the model from IMAGE 1 wearing the garment from IMAGE 2.' },
           ],
         }],
+        config: {
+          imageConfig: {
+            imageSize: '1K' as const,
+          },
+        },
       });
 
       const parts = response.candidates?.[0]?.content?.parts;
