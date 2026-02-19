@@ -12,8 +12,8 @@ const VALID_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_BASE64_SIZE = 20 * 1024 * 1024 * 1.37;
 
 const GEMINI_MODEL = 'gemini-3-pro-image-preview';
-const MAX_RETRIES = 3;
-const INITIAL_BACKOFF_MS = 1000;
+const MAX_RETRIES = 5;
+const INITIAL_BACKOFF_MS = 500;
 
 function validateBody(body: unknown): { valid: true; data: EditRequestBody } | { valid: false; error: string } {
   if (!body || typeof body !== 'object') {
@@ -97,17 +97,21 @@ async function callGeminiEdit(imageBase64: string, mimeType: string, prompt: str
     }
 
     try {
+      // Bump temperature on retries to escape repeated MALFORMED_FUNCTION_CALL
+      const temperature = attempt === 0 ? 1.0 : 1.0 + attempt * 0.1;
+
       const response = await client.models.generateContent({
         model: GEMINI_MODEL,
         contents: [{
           role: 'user',
           parts: [
-            { text: prompt },
+            { text: attempt > 0 ? prompt + '\n\nGenerate the edited image.' : prompt },
             { inlineData: { mimeType, data: imageBase64 } },
           ],
         }],
         config: {
           responseModalities: ['TEXT', 'IMAGE'],
+          temperature,
           imageConfig: {
             imageSize: '1K' as const,
           },
