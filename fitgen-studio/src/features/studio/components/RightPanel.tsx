@@ -559,7 +559,7 @@ export function RightPanel() {
       const editedUrl = await uploadBase64ToStorage(result.data.imageBase64, result.data.mimeType, userId);
 
       const newImage = {
-        id: `edit-${Date.now()}`,
+        id: crypto.randomUUID(),
         url: editedUrl,
         thumbnailUrl: editedUrl,
         prompt: `${editType}: ${instruction}`,
