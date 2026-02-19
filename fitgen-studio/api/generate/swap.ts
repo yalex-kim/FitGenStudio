@@ -134,6 +134,7 @@ async function callGeminiSwap(instruction: string, modelImg: string, garmentImg:
           ],
         }],
         config: {
+          responseModalities: ['TEXT', 'IMAGE'],
           imageConfig: {
             imageSize: '1K' as const,
           },

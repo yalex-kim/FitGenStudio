@@ -93,6 +93,7 @@ async function callGemini(prompt: string, framing?: string) {
     model: GEMINI_MODEL,
     contents: prompt,
     config: {
+      responseModalities: ['TEXT', 'IMAGE'],
       imageConfig: {
         aspectRatio: getAspectRatio(framing) as '1:1',
         imageSize: '1K' as const,

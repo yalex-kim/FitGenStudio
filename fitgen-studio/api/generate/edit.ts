@@ -106,6 +106,7 @@ async function callGeminiEdit(imageBase64: string, mimeType: string, prompt: str
           ],
         }],
         config: {
+          responseModalities: ['TEXT', 'IMAGE'],
           imageConfig: {
             imageSize: '1K' as const,
           },

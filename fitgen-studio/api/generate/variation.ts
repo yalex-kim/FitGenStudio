@@ -211,6 +211,7 @@ async function callGeminiVariation(
           parts: inputParts,
         }],
         config: {
+          responseModalities: ['TEXT', 'IMAGE'],
           imageConfig: {
             aspectRatio: getAspectRatio(framing) as '1:1',
             imageSize: '1K' as const,
