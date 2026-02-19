@@ -5,6 +5,15 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { useAssetStore } from "./assetStore";
 import { useGalleryStore } from "./galleryStore";
 
+/**
+ * Detect in-app browsers (WebView) that Google blocks for OAuth.
+ * Google returns 403 disallowed_useragent for these.
+ */
+function isWebView(): boolean {
+  const ua = navigator.userAgent || "";
+  return /FBAN|FBAV|Instagram|Line\/|KakaoTalk|NAVER|Daum|wv|WebView/i.test(ua);
+}
+
 function mapSupabaseUser(su: SupabaseUser): User {
   return {
     id: su.id,
@@ -80,13 +89,34 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
   loginWithGoogle: async () => {
     set({ isLoading: true, error: null });
+    const redirectTo = import.meta.env.VITE_SITE_URL
+      ? `${import.meta.env.VITE_SITE_URL}/`
+      : `${window.location.origin}/`;
+
+    if (isWebView()) {
+      // In-app browsers get blocked by Google (403 disallowed_useragent).
+      // Build the OAuth URL and open it in the system browser instead.
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error) {
+        set({ isLoading: false, error: error.message });
+        return;
+      }
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
+      set({ isLoading: false });
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: import.meta.env.VITE_SITE_URL
-          ? `${import.meta.env.VITE_SITE_URL}/`
-          : `${window.location.origin}/`,
-      },
+      options: { redirectTo },
     });
     if (error) {
       set({ isLoading: false, error: error.message });
