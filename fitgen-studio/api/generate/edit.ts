@@ -89,6 +89,7 @@ async function callGeminiEdit(imageBase64: string, mimeType: string, prompt: str
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
 
   const client = new GoogleGenAI({ apiKey });
+  let lastBlockReason = '';
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (attempt > 0) {
@@ -113,10 +114,20 @@ async function callGeminiEdit(imageBase64: string, mimeType: string, prompt: str
         },
       });
 
-      const parts = response.candidates?.[0]?.content?.parts;
-      if (!parts) continue;
+      // Check for safety blocks or empty response
+      const candidate = response.candidates?.[0];
+      if (!candidate?.content?.parts) {
+        const reason = candidate?.finishReason || 'no parts';
+        lastBlockReason = `Attempt ${attempt + 1}: empty response (${reason})`;
+        console.error(lastBlockReason, JSON.stringify({
+          finishReason: candidate?.finishReason,
+          safetyRatings: candidate?.safetyRatings,
+          promptFeedback: (response as any).promptFeedback,
+        }));
+        continue;
+      }
 
-      for (const part of parts) {
+      for (const part of candidate.content.parts) {
         if (part.inlineData && part.inlineData.data) {
           return {
             imageBase64: part.inlineData.data,
@@ -127,15 +138,22 @@ async function callGeminiEdit(imageBase64: string, mimeType: string, prompt: str
         }
       }
 
+      // Got parts but no image data — log what we received
+      const partTypes = candidate.content.parts.map(p =>
+        p.inlineData ? 'image' : p.text ? `text(${p.text.slice(0, 80)})` : 'unknown'
+      );
+      lastBlockReason = `Attempt ${attempt + 1}: response had parts [${partTypes.join(', ')}] but no image data`;
+      console.error(lastBlockReason);
       continue;
     } catch (e: any) {
+      lastBlockReason = `Attempt ${attempt + 1}: ${e?.message || e}`;
       if (e?.status === 429 && attempt < MAX_RETRIES - 1) continue;
       if (e?.status >= 500 && attempt < MAX_RETRIES - 1) continue;
       throw e;
     }
   }
 
-  throw new Error('Max retries exceeded');
+  throw new Error(`Edit failed after ${MAX_RETRIES} attempts. Last: ${lastBlockReason}`);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -167,7 +185,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: error.body?.error?.message || 'Invalid request.' });
     }
 
-    console.error('Image edit error:', error);
-    return res.status(500).json({ error: 'Internal server error during image editing.' });
+    const msg = error?.message || String(error);
+    console.error('Image edit error:', msg, error);
+    return res.status(500).json({ error: msg });
   }
 }
