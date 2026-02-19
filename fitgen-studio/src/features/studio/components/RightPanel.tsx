@@ -1072,8 +1072,26 @@ export function RightPanel() {
                 <p className="mb-2 text-[11px] text-muted-foreground">
                   Describe what to change. The model's face and body will be preserved.
                 </p>
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {[
+                    "Tuck the shirt in",
+                    "Roll up the sleeves",
+                    "Unbutton the top button",
+                    "Change shoes to white sneakers",
+                    "Change background to outdoor cafe",
+                    "Add a wristwatch",
+                  ].map((ex) => (
+                    <button
+                      key={ex}
+                      className="rounded-full border border-muted-foreground/20 bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground hover:border-primary/30"
+                      onClick={() => setCustomInstruction(ex)}
+                    >
+                      {ex}
+                    </button>
+                  ))}
+                </div>
                 <Textarea
-                  placeholder="e.g. Change shoes to white sneakers, add a watch on the left wrist, make the background a rooftop at sunset..."
+                  placeholder="Type an instruction or click an example above..."
                   value={customInstruction}
                   onChange={(e) => setCustomInstruction(e.target.value)}
                   className="min-h-[80px] text-xs resize-none"
@@ -1164,25 +1182,6 @@ export function RightPanel() {
                 </Button>
               </div>
 
-              <Separator />
-
-              <div>
-                <h3 className="mb-2 text-sm font-semibold">Styling</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="ft-tuck" className="text-xs">Tuck In</Label>
-                    <Switch id="ft-tuck" checked={tuckIn} onCheckedChange={setTuckIn} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="ft-sleeve" className="text-xs">Sleeve Roll-up</Label>
-                    <Switch id="ft-sleeve" checked={sleeveRoll} onCheckedChange={setSleeveRoll} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="ft-button" className="text-xs">Button Open</Label>
-                    <Switch id="ft-button" checked={buttonOpen} onCheckedChange={setButtonOpen} />
-                  </div>
-                </div>
-              </div>
             </>
           )}
         </div>
