@@ -47,6 +47,7 @@ import {
   ImageOff,
   Loader2,
   Heart,
+  Share2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -207,6 +208,19 @@ export function GalleryPage() {
     },
     []
   );
+
+  const handleShare = useCallback(async (image: { url: string }) => {
+    if (!image.url) return;
+    if (navigator.share) {
+      await navigator.share({
+        title: "FitGen Studio - Generated Lookbook",
+        url: image.url,
+      }).catch(() => {});
+    } else {
+      await navigator.clipboard.writeText(image.url);
+      toast.success("Link copied to clipboard");
+    }
+  }, []);
 
   const handleDelete = useCallback(
     (ids: string[]) => {
@@ -566,6 +580,22 @@ export function GalleryPage() {
                             </TooltipTrigger>
                             <TooltipContent>Download</TooltipContent>
                           </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-white hover:bg-white/20"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleShare(item);
+                                }}
+                              >
+                                <Share2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Share</TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
                     )}
@@ -691,6 +721,13 @@ export function GalleryPage() {
                 >
                   <Palette className="mr-2 h-4 w-4" />
                   Use as Reference
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleShare(detailImage)}
+                >
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Share
                 </Button>
                 <Button
                   variant="destructive"
