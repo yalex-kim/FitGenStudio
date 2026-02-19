@@ -814,67 +814,92 @@ export function CenterPanel() {
                       #{i + 1}
                     </span>
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-white hover:bg-white/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedImageIndex(i);
-                          setViewMode("detail");
-                        }}
-                      >
-                        <ZoomIn className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-white hover:bg-white/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(image.id);
-                        }}
-                      >
-                        <Heart
-                          className={cn(
-                            "h-3.5 w-3.5",
-                            isFav && "fill-red-500 text-red-500"
-                          )}
-                        />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-white hover:bg-white/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSave(image);
-                        }}
-                      >
-                        <Save className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-white hover:bg-white/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSaveAsReference(image);
-                        }}
-                      >
-                        <Palette className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-white hover:bg-white/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDownload(image);
-                        }}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-white hover:bg-white/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedImageIndex(i);
+                              setViewMode("detail");
+                            }}
+                          >
+                            <ZoomIn className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Detail View</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-white hover:bg-white/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(image.id);
+                            }}
+                          >
+                            <Heart
+                              className={cn(
+                                "h-3.5 w-3.5",
+                                isFav && "fill-red-500 text-red-500"
+                              )}
+                            />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{isFav ? "Unfavorite" : "Favorite"}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-white hover:bg-white/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSave(image);
+                            }}
+                          >
+                            <Save className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Save as Model</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-white hover:bg-white/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSaveAsReference(image);
+                            }}
+                          >
+                            <Palette className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Save as Reference</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-white hover:bg-white/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(image);
+                            }}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Download</TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 </div>

@@ -9,6 +9,7 @@ import { Shirt, Users, Palette, Images, X, Check, Loader2, Plus, UserRound } fro
 import { Button } from "@/components/ui/button";
 import { useGalleryStore } from "@/stores/galleryStore";
 import toast from "react-hot-toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { StudioLeftTab } from "@/stores/studioStore";
 import type { GarmentAsset, GeneratedImage } from "@/types";
@@ -303,30 +304,45 @@ export function LeftPanel() {
                       {/* Hover action icons */}
                       <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
                         <div className="flex w-full justify-end gap-1 p-1.5">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-white hover:bg-white/20"
-                            onClick={() => handleUseAsRef(img)}
-                          >
-                            <Palette className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-white hover:bg-white/20"
-                            onClick={() => handleUseAsModel(img)}
-                          >
-                            <UserRound className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-white hover:bg-white/20"
-                            onClick={() => addToCanvasAndSelect(img)}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-white hover:bg-white/20"
+                                onClick={() => handleUseAsRef(img)}
+                              >
+                                <Palette className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Save as Reference</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-white hover:bg-white/20"
+                                onClick={() => handleUseAsModel(img)}
+                              >
+                                <UserRound className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Save as Model</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-white hover:bg-white/20"
+                                onClick={() => addToCanvasAndSelect(img)}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Add to Canvas</TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
                     </div>
