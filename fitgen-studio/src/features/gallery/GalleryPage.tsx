@@ -29,6 +29,11 @@ import { useStudioStore } from "@/stores/studioStore";
 import { downloadWithWatermark } from "@/lib/watermark";
 import { cn } from "@/lib/utils";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Search,
   Download,
   Trash2,
@@ -41,6 +46,7 @@ import {
   SlidersHorizontal,
   ImageOff,
   Loader2,
+  Heart,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -120,6 +126,10 @@ export function GalleryPage() {
     loadMore,
   } = useGalleryStore();
 
+  const favoriteImageIds = useStudioStore((s) => s.favoriteImageIds);
+  const toggleFavorite = useStudioStore((s) => s.toggleFavorite);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
   // Re-initialize if images are empty (e.g. initial load failed due to DB timeout)
   const initialize = useGalleryStore((s) => s.initialize);
   useEffect(() => {
@@ -131,6 +141,11 @@ export function GalleryPage() {
   // Filtered and sorted images
   const filtered = useMemo(() => {
     let result = [...images];
+
+    // Filter by favorites
+    if (showFavoritesOnly) {
+      result = result.filter((img) => favoriteImageIds.has(img.id));
+    }
 
     // Filter by style
     if (filterStyle !== "all") {
@@ -163,7 +178,7 @@ export function GalleryPage() {
     }
 
     return result;
-  }, [images, filterStyle, searchQuery, sortBy]);
+  }, [images, filterStyle, searchQuery, sortBy, showFavoritesOnly, favoriteImageIds]);
 
   const hasSelection = selectedIds.size > 0;
   const batchMode = hasSelection;
@@ -346,6 +361,20 @@ export function GalleryPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={showFavoritesOnly ? "default" : "outline"}
+                size="sm"
+                className={cn("h-9", showFavoritesOnly && "bg-red-500 hover:bg-red-600 text-white")}
+                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              >
+                <Heart className={cn("mr-1 h-3.5 w-3.5", showFavoritesOnly && "fill-current")} />
+                Favorites
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{showFavoritesOnly ? "Show all images" : "Show favorites only"}</TooltipContent>
+          </Tooltip>
           <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
           <Select
             value={filterStyle}
@@ -446,6 +475,13 @@ export function GalleryPage() {
                       </Badge>
                     )}
 
+                    {/* Favorite indicator */}
+                    {favoriteImageIds.has(item.id) && !isUpscaled && (
+                      <div className="absolute right-2 top-2 z-10">
+                        <Heart className="h-4 w-4 fill-red-500 text-red-500 drop-shadow" />
+                      </div>
+                    )}
+
                     {/* Selection checkbox - always show in batch mode, on hover otherwise */}
                     <div
                       className={cn(
@@ -481,32 +517,55 @@ export function GalleryPage() {
                     {/* Hover overlay */}
                     {!batchMode && (
                       <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
-                        <div className="flex w-full items-center justify-between p-2">
-                          <div className="flex gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-white hover:bg-white/20"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDownload(item);
-                              }}
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-white hover:bg-white/20"
-                              title="Use as Reference"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUseAsReference(item);
-                              }}
-                            >
-                              <Palette className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
+                        <div className="flex w-full justify-end gap-1 p-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-white hover:bg-white/20"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(item.id);
+                                }}
+                              >
+                                <Heart className={cn("h-3.5 w-3.5", favoriteImageIds.has(item.id) && "fill-red-500 text-red-500")} />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{favoriteImageIds.has(item.id) ? "Unfavorite" : "Favorite"}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-white hover:bg-white/20"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUseAsReference(item);
+                                }}
+                              >
+                                <Palette className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Use as Reference</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-white hover:bg-white/20"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDownload(item);
+                                }}
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Download</TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
                     )}

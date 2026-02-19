@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UploadDropzone } from "./UploadDropzone";
-import { Shirt, Users, Palette, Images, X, Check, Loader2, Plus, UserRound } from "lucide-react";
+import { Shirt, Users, Palette, Images, X, Check, Loader2, Plus, UserRound, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGalleryStore } from "@/stores/galleryStore";
 import toast from "react-hot-toast";
@@ -26,6 +26,8 @@ export function LeftPanel() {
     selectReference,
     studioStep,
     selectedImageIndex,
+    favoriteImageIds,
+    toggleFavorite,
   } = useStudioStore();
 
   // Read assets from assetStore (Supabase-backed)
@@ -301,9 +303,28 @@ export function LeftPanel() {
                         alt=""
                         className="aspect-[3/4] w-full object-cover"
                       />
+                      {/* Favorite indicator */}
+                      {favoriteImageIds.has(img.id) && (
+                        <div className="absolute top-1 right-1 z-10">
+                          <Heart className="h-3.5 w-3.5 fill-red-500 text-red-500 drop-shadow" />
+                        </div>
+                      )}
                       {/* Hover action icons */}
                       <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
                         <div className="flex w-full justify-end gap-1 p-1.5">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-white hover:bg-white/20"
+                                onClick={() => toggleFavorite(img.id)}
+                              >
+                                <Heart className={cn("h-3.5 w-3.5", favoriteImageIds.has(img.id) && "fill-red-500 text-red-500")} />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{favoriteImageIds.has(img.id) ? "Unfavorite" : "Favorite"}</TooltipContent>
+                          </Tooltip>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
