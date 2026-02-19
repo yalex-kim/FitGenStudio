@@ -5,11 +5,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UploadDropzone } from "./UploadDropzone";
-import { Shirt, Users, Palette, X, Check } from "lucide-react";
+import { Shirt, Users, Palette, Images, X, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useGalleryStore } from "@/stores/galleryStore";
 import { cn } from "@/lib/utils";
 import type { StudioLeftTab } from "@/stores/studioStore";
-import type { GarmentAsset } from "@/types";
+import type { GarmentAsset, GeneratedImage } from "@/types";
 
 export function LeftPanel() {
   const {
@@ -21,6 +22,9 @@ export function LeftPanel() {
     selectModel,
     selectedReferenceId,
     selectReference,
+    studioStep,
+    generatedImages,
+    selectedImageIndex,
   } = useStudioStore();
 
   // Read assets from assetStore (Supabase-backed)
@@ -30,7 +34,37 @@ export function LeftPanel() {
   const uploadFiles = useAssetStore((s) => s.uploadFiles);
   const removeAssets = useAssetStore((s) => s.removeAssets);
 
+  // Gallery store for Generations tab
+  const galleryImages = useGalleryStore((s) => s.images);
+  const galleryHasMore = useGalleryStore((s) => s.hasMore);
+  const galleryIsLoadingMore = useGalleryStore((s) => s.isLoadingMore);
+  const galleryLoadMore = useGalleryStore((s) => s.loadMore);
+
   const [garmentCategory, setGarmentCategory] = useState<GarmentAsset["category"]>("tops");
+  const isFinetune = studioStep === "finetune";
+
+  /** In Fine Tune mode, add the image to canvas and select it */
+  const addToCanvasAndSelect = (image: GeneratedImage) => {
+    const imgs = useStudioStore.getState().generatedImages;
+    const existingIdx = imgs.findIndex((i) => i.id === image.id);
+    if (existingIdx >= 0) {
+      useStudioStore.getState().setSelectedImageIndex(existingIdx);
+    } else {
+      useStudioStore.getState().setGeneratedImages([...imgs, image]);
+      useStudioStore.getState().setSelectedImageIndex(imgs.length);
+    }
+  };
+
+  /** Convert any asset to a GeneratedImage so it can go on the canvas */
+  const assetToCanvasImage = (id: string, url: string, thumbUrl: string, name: string): GeneratedImage => ({
+    id,
+    url,
+    thumbnailUrl: thumbUrl,
+    prompt: name,
+    modelId: "",
+    createdAt: new Date().toISOString(),
+    status: "completed",
+  });
 
   const handleGarmentUpload = (files: File[]) => {
     uploadFiles(files, "garments", garmentCategory);
@@ -47,7 +81,7 @@ export function LeftPanel() {
         onValueChange={(v) => setLeftTab(v as StudioLeftTab)}
         className="flex flex-1 flex-col overflow-hidden"
       >
-        <TabsList className="mx-3 mt-3 grid w-auto grid-cols-3">
+        <TabsList className="mx-3 mt-3 grid w-auto grid-cols-4">
           <TabsTrigger value="product" className="relative gap-1 text-xs">
             <Shirt className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Product</span>
@@ -64,8 +98,15 @@ export function LeftPanel() {
           </TabsTrigger>
           <TabsTrigger value="reference" className="relative gap-1 text-xs">
             <Palette className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Reference</span>
+            <span className="hidden sm:inline">Ref</span>
             {selectedReferenceId && (
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="generations" className="relative gap-1 text-xs">
+            <Images className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Gen</span>
+            {selectedImageIndex !== null && (
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
             )}
           </TabsTrigger>
@@ -101,16 +142,20 @@ export function LeftPanel() {
                           ? "border-primary ring-2 ring-primary/20"
                           : "border-transparent hover:border-muted-foreground/25"
                       )}
-                      onClick={() =>
-                        selectGarment(selectedGarmentId === garment.id ? null : garment.id)
-                      }
+                      onClick={() => {
+                        if (isFinetune) {
+                          addToCanvasAndSelect(assetToCanvasImage(garment.id, garment.originalUrl, garment.thumbnailUrl, garment.name));
+                        } else {
+                          selectGarment(selectedGarmentId === garment.id ? null : garment.id);
+                        }
+                      }}
                     >
                       <img
                         src={garment.thumbnailUrl}
                         alt={garment.name}
                         className="aspect-square w-full object-cover"
                       />
-                      {selectedGarmentId === garment.id && (
+                      {!isFinetune && selectedGarmentId === garment.id && (
                         <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
                           <Check className="h-3 w-3" />
                         </div>
@@ -158,16 +203,20 @@ export function LeftPanel() {
                           ? "border-primary ring-2 ring-primary/20"
                           : "border-transparent hover:border-muted-foreground/25"
                       )}
-                      onClick={() =>
-                        selectModel(selectedModelId === model.id ? null : model.id)
-                      }
+                      onClick={() => {
+                        if (isFinetune) {
+                          addToCanvasAndSelect(assetToCanvasImage(model.id, model.imageUrl, model.thumbnailUrl, model.name));
+                        } else {
+                          selectModel(selectedModelId === model.id ? null : model.id);
+                        }
+                      }}
                     >
                       <img
                         src={model.thumbnailUrl}
                         alt={model.name}
                         className="aspect-[3/4] w-full object-cover"
                       />
-                      {selectedModelId === model.id && (
+                      {!isFinetune && selectedModelId === model.id && (
                         <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
                           <Check className="h-3 w-3" />
                         </div>
@@ -193,6 +242,67 @@ export function LeftPanel() {
           </ScrollArea>
         </TabsContent>
 
+        <TabsContent value="generations" className="flex-1 overflow-hidden mt-0">
+          <ScrollArea className="h-full">
+            <div className="space-y-3 p-3">
+              {galleryImages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                  <Images className="mb-2 h-8 w-8" />
+                  <p className="text-sm">No generations yet</p>
+                  <p className="text-xs">Generate images to see them here</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {galleryImages.map((img) => {
+                    const imgs = generatedImages;
+                    const isOnCanvas = imgs.some((i) => i.id === img.id);
+                    const isSelected = isOnCanvas && selectedImageIndex !== null && imgs[selectedImageIndex]?.id === img.id;
+                    return (
+                      <div
+                        key={img.id}
+                        className={cn(
+                          "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-colors",
+                          isSelected
+                            ? "border-primary ring-2 ring-primary/20"
+                            : "border-transparent hover:border-muted-foreground/25"
+                        )}
+                        onClick={() => addToCanvasAndSelect(img)}
+                      >
+                        <img
+                          src={img.thumbnailUrl}
+                          alt=""
+                          className="aspect-[3/4] w-full object-cover"
+                        />
+                        {isSelected && (
+                          <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                            <Check className="h-3 w-3" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {galleryHasMore && (
+                <div className="flex justify-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    disabled={galleryIsLoadingMore}
+                    onClick={galleryLoadMore}
+                  >
+                    {galleryIsLoadingMore ? (
+                      <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                    ) : null}
+                    Load More
+                  </Button>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
         <TabsContent value="reference" className="flex-1 overflow-hidden mt-0">
           <ScrollArea className="h-full">
             <div className="space-y-3 p-3">
@@ -211,16 +321,20 @@ export function LeftPanel() {
                           ? "border-primary ring-2 ring-primary/20"
                           : "border-transparent hover:border-muted-foreground/25"
                       )}
-                      onClick={() =>
-                        selectReference(selectedReferenceId === ref.id ? null : ref.id)
-                      }
+                      onClick={() => {
+                        if (isFinetune) {
+                          addToCanvasAndSelect(assetToCanvasImage(ref.id, ref.originalUrl, ref.thumbnailUrl, ref.name));
+                        } else {
+                          selectReference(selectedReferenceId === ref.id ? null : ref.id);
+                        }
+                      }}
                     >
                       <img
                         src={ref.thumbnailUrl}
                         alt={ref.name}
                         className="aspect-square w-full object-cover"
                       />
-                      {selectedReferenceId === ref.id && (
+                      {!isFinetune && selectedReferenceId === ref.id && (
                         <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
                           <Check className="h-3 w-3" />
                         </div>

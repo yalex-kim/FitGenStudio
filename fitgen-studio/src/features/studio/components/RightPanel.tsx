@@ -30,7 +30,6 @@ import {
 import { uploadBase64ToStorage } from "@/lib/storageUpload";
 import { cn } from "@/lib/utils";
 import type { StudioStep } from "@/stores/studioStore";
-import type { GeneratedImage } from "@/types";
 import {
   Sparkles,
   Heart,
@@ -53,7 +52,6 @@ import {
   X,
   Palette,
   Users,
-  Images,
 } from "lucide-react";
 
 const STYLE_PRESETS = [
@@ -205,7 +203,6 @@ export function RightPanel() {
   const { canGenerate: hasCredits, getRemaining, getLimit, recordUsage } = useUsageStore();
   const [showLowCreditDialog, setShowLowCreditDialog] = useState(false);
   const [customInstruction, setCustomInstruction] = useState("");
-  const [showGalleryPicker, setShowGalleryPicker] = useState(false);
   const [editingAction, setEditingAction] = useState<string | null>(null);
 
   const tier = user?.tier ?? "free";
@@ -219,11 +216,6 @@ export function RightPanel() {
   const references = useAssetStore((s) => s.references);
   const selectedReferenceId = useStudioStore((s) => s.selectedReferenceId);
 
-  // Gallery store selectors for fine-tune image picker
-  const galleryImages = useGalleryStore((s) => s.images);
-  const galleryHasMore = useGalleryStore((s) => s.hasMore);
-  const galleryIsLoadingMore = useGalleryStore((s) => s.isLoadingMore);
-  const galleryLoadMore = useGalleryStore((s) => s.loadMore);
 
   // Determine mode: model+garment = Swap, model-only = Variation, else = Model Generation
   const selectedGarment = garments.find((g) => g.id === selectedGarmentId);
@@ -682,18 +674,6 @@ export function RightPanel() {
     await handleStepGenerate();
   };
 
-  const handleGalleryImageSelect = (galleryImage: GeneratedImage) => {
-    const imgs = useStudioStore.getState().generatedImages;
-    const existingIdx = imgs.findIndex((i) => i.id === galleryImage.id);
-    if (existingIdx >= 0) {
-      useStudioStore.getState().setSelectedImageIndex(existingIdx);
-    } else {
-      useStudioStore.getState().setGeneratedImages([...imgs, galleryImage]);
-      useStudioStore.getState().setSelectedImageIndex(imgs.length);
-    }
-    setShowGalleryPicker(false);
-  };
-
   const stepBtnProps = getStepButtonProps();
 
   return (
@@ -1074,46 +1054,14 @@ export function RightPanel() {
           {/* ===== STEP: Fine Tune ===== */}
           {studioStep === "finetune" && (
             <>
-              {/* Target Image */}
-              <div>
-                <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
-                  <Images className="h-4 w-4" />
-                  Target Image
-                </h3>
-                {selectedGeneratedImage ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 p-2">
-                    <img
-                      src={selectedGeneratedImage.thumbnailUrl}
-                      alt="Target"
-                      className="h-14 w-10 shrink-0 rounded object-cover"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-xs font-medium">Selected Image</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {new Date(selectedGeneratedImage.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="shrink-0 text-[10px]"
-                      onClick={() => setShowGalleryPicker(true)}
-                    >
-                      Change
-                    </Button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowGalleryPicker(true)}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 p-3 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                  >
-                    <Images className="h-4 w-4" />
-                    Choose from Gallery
-                  </button>
-                )}
-              </div>
-
-              <Separator />
+              {!selectedGeneratedImage && (
+                <div className="rounded-lg border border-dashed border-muted-foreground/30 p-4 text-center">
+                  <SlidersHorizontal className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-xs text-muted-foreground">
+                    Select an image from the left panel to fine-tune.
+                  </p>
+                </div>
+              )}
 
               {/* Custom Instruction */}
               <div>
@@ -1317,61 +1265,6 @@ export function RightPanel() {
         </DialogContent>
       </Dialog>
 
-      {/* Gallery image picker dialog */}
-      <Dialog open={showGalleryPicker} onOpenChange={setShowGalleryPicker}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Choose from Gallery</DialogTitle>
-            <DialogDescription>
-              Select an image to use as the fine-tune target.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[400px]">
-            {galleryImages.length === 0 ? (
-              <div className="p-8 text-center text-sm text-muted-foreground">
-                No images in gallery yet. Generate some images first.
-              </div>
-            ) : (
-              <div className="grid grid-cols-4 gap-2 p-1">
-                {galleryImages.map((img) => (
-                  <button
-                    key={img.id}
-                    onClick={() => handleGalleryImageSelect(img)}
-                    className={cn(
-                      "group relative aspect-[3/4] overflow-hidden rounded-lg border-2 transition-all hover:border-primary",
-                      selectedGeneratedImage?.id === img.id
-                        ? "border-primary ring-2 ring-primary/20"
-                        : "border-transparent"
-                    )}
-                  >
-                    <img
-                      src={img.thumbnailUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            )}
-            {galleryHasMore && (
-              <div className="flex justify-center p-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                  disabled={galleryIsLoadingMore}
-                  onClick={galleryLoadMore}
-                >
-                  {galleryIsLoadingMore ? (
-                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                  ) : null}
-                  Load More
-                </Button>
-              </div>
-            )}
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

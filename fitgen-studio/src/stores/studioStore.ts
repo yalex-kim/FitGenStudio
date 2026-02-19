@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ModelAsset, GarmentAsset, ReferenceAsset, GeneratedImage } from "@/types";
 
-export type StudioLeftTab = "product" | "models" | "reference";
+export type StudioLeftTab = "product" | "models" | "reference" | "generations";
 export type StudioStep = "model" | "scene" | "tryon" | "finetune";
 
 export interface StudioState {
