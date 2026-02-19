@@ -36,6 +36,7 @@ import {
   RefreshCw,
   Save,
   Palette,
+  XCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { GeneratedImage } from "@/types";
@@ -315,6 +316,7 @@ type ViewMode = "grid" | "detail" | "compare";
 export function CenterPanel() {
   const {
     generatedImages,
+    setGeneratedImages,
     isGenerating,
     generationProgress,
     generationError,
@@ -467,6 +469,19 @@ export function CenterPanel() {
       setIsUpscaling(false);
     }
   }, [isUpscaling, setIsUpscaling]);
+
+  const handleRemoveFromCanvas = useCallback((index: number) => {
+    const imgs = useStudioStore.getState().generatedImages;
+    const next = imgs.filter((_, i) => i !== index);
+    setGeneratedImages(next);
+    // Adjust selection
+    if (selectedImageIndex === index) {
+      setSelectedImageIndex(next.length > 0 ? Math.min(index, next.length - 1) : null);
+      if (next.length === 0) setViewMode("grid");
+    } else if (selectedImageIndex !== null && selectedImageIndex > index) {
+      setSelectedImageIndex(selectedImageIndex - 1);
+    }
+  }, [setGeneratedImages, selectedImageIndex, setSelectedImageIndex]);
 
   const handleZoomIn = useCallback(() => {
     setZoomLevel((z) => Math.min(z + 0.25, 3));
@@ -801,9 +816,19 @@ export function CenterPanel() {
                     </div>
                   </div>
                 )}
+                {/* Remove button */}
+                <button
+                  className="absolute top-1.5 right-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity hover:bg-destructive group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveFromCanvas(i);
+                  }}
+                >
+                  <XCircle className="h-4 w-4" />
+                </button>
                 {/* Favorite indicator */}
                 {isFav && (
-                  <div className="absolute top-2 right-2 z-10">
+                  <div className="absolute top-2 left-2 z-10">
                     <Heart className="h-4 w-4 fill-red-500 text-red-500 drop-shadow" />
                   </div>
                 )}
