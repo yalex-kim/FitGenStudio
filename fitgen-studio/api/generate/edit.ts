@@ -105,12 +105,12 @@ async function callGeminiEdit(imageBase64: string, mimeType: string, prompt: str
         contents: [{
           role: 'user',
           parts: [
-            { text: attempt > 0 ? prompt + '\n\nGenerate the edited image.' : prompt },
             { inlineData: { mimeType, data: imageBase64 } },
+            { text: attempt > 0 ? prompt + '\n\nGenerate the edited image.' : prompt },
           ],
         }],
         config: {
-          responseModalities: ['TEXT', 'IMAGE'],
+          responseModalities: ['IMAGE'],
           temperature,
           imageConfig: {
             imageSize: '1K' as const,
