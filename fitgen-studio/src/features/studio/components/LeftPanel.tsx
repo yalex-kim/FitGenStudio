@@ -300,35 +300,34 @@ export function LeftPanel() {
                         alt=""
                         className="aspect-[3/4] w-full object-cover"
                       />
-                      {/* Hover action buttons */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="h-7 w-[90%] text-[10px]"
-                          onClick={() => handleUseAsRef(img)}
-                        >
-                          <Palette className="mr-1 h-3 w-3" />
-                          Use as Ref
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="h-7 w-[90%] text-[10px]"
-                          onClick={() => handleUseAsModel(img)}
-                        >
-                          <UserRound className="mr-1 h-3 w-3" />
-                          Use as Model
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="h-7 w-[90%] text-[10px]"
-                          onClick={() => addToCanvasAndSelect(img)}
-                        >
-                          <Plus className="mr-1 h-3 w-3" />
-                          Add to Canvas
-                        </Button>
+                      {/* Hover action icons */}
+                      <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100">
+                        <div className="flex w-full justify-end gap-1 p-1.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-white hover:bg-white/20"
+                            onClick={() => handleUseAsRef(img)}
+                          >
+                            <Palette className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-white hover:bg-white/20"
+                            onClick={() => handleUseAsModel(img)}
+                          >
+                            <UserRound className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-white hover:bg-white/20"
+                            onClick={() => addToCanvasAndSelect(img)}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
