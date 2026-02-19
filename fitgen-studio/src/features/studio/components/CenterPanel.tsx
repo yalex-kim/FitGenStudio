@@ -18,14 +18,6 @@ import {
 import { uploadBase64ToStorage } from "@/lib/storageUpload";
 import { cn } from "@/lib/utils";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import {
   Paintbrush,
   Download,
   ZoomIn,
@@ -43,10 +35,6 @@ import {
   AlertTriangle,
   RefreshCw,
   Save,
-  SlidersHorizontal,
-  ImagePlus,
-  Footprints,
-  X,
   Palette,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -320,15 +308,6 @@ async function imageUrlToBase64(url: string): Promise<{ base64: string; mimeType
   return { base64: dataUrl.split(",")[1], mimeType: "image/jpeg" };
 }
 
-const BACKGROUND_OPTIONS = [
-  { id: "white-studio", label: "White Studio" },
-  { id: "outdoor-park", label: "Park" },
-  { id: "outdoor-cafe", label: "Cafe" },
-  { id: "outdoor-street", label: "Street" },
-  { id: "urban-city", label: "Urban City" },
-  { id: "beach", label: "Beach" },
-];
-
 // ---- Main CenterPanel ----
 
 type ViewMode = "grid" | "detail" | "compare";
@@ -345,15 +324,12 @@ export function CenterPanel() {
     toggleFavorite,
   } = useStudioStore();
 
-  const { isUpscaling, setIsUpscaling, isEditing, setIsEditing } = useStudioStore();
+  const { isUpscaling, setIsUpscaling, isEditing } = useStudioStore();
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [zoomLevel, setZoomLevel] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogImageIndex, setDialogImageIndex] = useState<number | null>(null);
-  const [showFineTune, setShowFineTune] = useState(false);
-  const [selectedBackground, setSelectedBackground] = useState("");
-  const [shoesInput, setShoesInput] = useState("");
 
   // Reset zoom when switching images
   useEffect(() => {
@@ -491,64 +467,6 @@ export function CenterPanel() {
       setIsUpscaling(false);
     }
   }, [isUpscaling, setIsUpscaling]);
-
-  const handleEdit = useCallback(async (
-    image: GeneratedImage,
-    editType: "background" | "shoes" | "custom",
-    editInstruction: string,
-  ) => {
-    if (!image.url || isEditing) return;
-    setIsEditing(true);
-    try {
-      const { base64, mimeType } = await imageUrlToBase64(image.url);
-      const user = useAuthStore.getState().user;
-      const resp = await fetch("/api/generate/edit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-user-id": user?.id ?? "anonymous",
-          "x-user-tier": user?.tier ?? "free",
-        },
-        body: JSON.stringify({
-          imageBase64: base64,
-          imageMimeType: mimeType,
-          editType,
-          editInstruction,
-        }),
-      });
-
-      if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.error || "Edit failed");
-      }
-
-      const result = await resp.json();
-      const userId = useAuthStore.getState().user?.id;
-      const editedUrl = await uploadBase64ToStorage(result.data.imageBase64, result.data.mimeType, userId);
-
-      // Add edited image as a new variation (preserve original)
-      const newImage: GeneratedImage = {
-        id: `edit-${Date.now()}`,
-        url: editedUrl,
-        thumbnailUrl: editedUrl,
-        prompt: `${editType}: ${editInstruction}`,
-        modelId: image.modelId,
-        garmentId: image.garmentId,
-        createdAt: new Date().toISOString(),
-        status: "completed",
-      };
-
-      const { generatedImages: imgs, setGeneratedImages } = useStudioStore.getState();
-      setGeneratedImages([...imgs, newImage]);
-      // Select the new image
-      useStudioStore.getState().setSelectedImageIndex(imgs.length);
-      toast.success("Image edited successfully!");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Edit failed");
-    } finally {
-      setIsEditing(false);
-    }
-  }, [isEditing, setIsEditing]);
 
   const handleZoomIn = useCallback(() => {
     setZoomLevel((z) => Math.min(z + 0.25, 3));
@@ -751,107 +669,8 @@ export function CenterPanel() {
                 onSaveAsReference={() => handleSaveAsReference(image)}
               />
             )}
-            {image && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showFineTune ? "secondary" : "ghost"}
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setShowFineTune(!showFineTune)}
-                  >
-                    <SlidersHorizontal className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Fine-tune</TooltipContent>
-              </Tooltip>
-            )}
           </div>
         </div>
-
-        {/* Fine-tune panel */}
-        {showFineTune && image && (
-          <div className="border-b border-border bg-muted/50 px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-semibold flex items-center gap-1.5">
-                <SlidersHorizontal className="h-3.5 w-3.5" />
-                Fine-tune
-              </h4>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowFineTune(false)}>
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {/* Upscale */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Upscale</label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-xs"
-                  disabled={isUpscaling}
-                  onClick={() => handleUpscale(image)}
-                >
-                  {isUpscaling ? (
-                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                  ) : (
-                    <ArrowUpFromLine className="mr-1.5 h-3 w-3" />
-                  )}
-                  {isUpscaling ? "Upscaling..." : "Upscale to 4K"}
-                </Button>
-              </div>
-              {/* Change Background */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Background</label>
-                <div className="flex gap-1.5">
-                  <Select value={selectedBackground} onValueChange={setSelectedBackground}>
-                    <SelectTrigger className="h-8 text-xs flex-1">
-                      <SelectValue placeholder="Select..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BACKGROUND_OPTIONS.map((bg) => (
-                        <SelectItem key={bg.id} value={bg.id}>{bg.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
-                    disabled={!selectedBackground || isEditing}
-                    onClick={() => {
-                      const label = BACKGROUND_OPTIONS.find((b) => b.id === selectedBackground)?.label || selectedBackground;
-                      handleEdit(image, "background", label);
-                    }}
-                  >
-                    {isEditing ? <Loader2 className="h-3 w-3 animate-spin" /> : <ImagePlus className="h-3 w-3" />}
-                  </Button>
-                </div>
-              </div>
-              {/* Change Shoes */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Shoes</label>
-                <div className="flex gap-1.5">
-                  <Input
-                    placeholder="e.g. white sneakers"
-                    value={shoesInput}
-                    onChange={(e) => setShoesInput(e.target.value)}
-                    className="h-8 text-xs flex-1"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8 shrink-0"
-                    disabled={!shoesInput.trim() || isEditing}
-                    onClick={() => handleEdit(image, "shoes", shoesInput.trim())}
-                  >
-                    {isEditing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Footprints className="h-3 w-3" />}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Image */}
         <div className="flex flex-1 items-center justify-center overflow-auto p-4">

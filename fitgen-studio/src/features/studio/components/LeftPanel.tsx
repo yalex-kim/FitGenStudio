@@ -5,9 +5,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UploadDropzone } from "./UploadDropzone";
-import { Shirt, Users, Palette, Images, X, Check, Loader2 } from "lucide-react";
+import { Shirt, Users, Palette, Images, X, Check, Loader2, Plus, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGalleryStore } from "@/stores/galleryStore";
+import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 import type { StudioLeftTab } from "@/stores/studioStore";
 import type { GarmentAsset, GeneratedImage } from "@/types";
@@ -23,7 +24,6 @@ export function LeftPanel() {
     selectedReferenceId,
     selectReference,
     studioStep,
-    generatedImages,
     selectedImageIndex,
   } = useStudioStore();
 
@@ -72,6 +72,43 @@ export function LeftPanel() {
 
   const handleReferenceUpload = (files: File[]) => {
     uploadFiles(files, "references");
+  };
+
+  const handleUseAsModel = (img: GeneratedImage) => {
+    const { gender, bodyType, presetType } = useStudioStore.getState();
+    const studioModels = useStudioStore.getState().models;
+    if (studioModels.some((m) => m.id === img.id)) {
+      toast("Already saved to My Models", { icon: "ℹ️" });
+      return;
+    }
+    const modelAsset = {
+      id: img.id,
+      name: `Model ${studioModels.length + 1}`,
+      imageUrl: img.url,
+      thumbnailUrl: img.thumbnailUrl || img.url,
+      presetType: presetType ?? undefined,
+      gender,
+      bodyType,
+      createdAt: img.createdAt,
+    };
+    useAssetStore.getState().addModel(modelAsset);
+    useStudioStore.getState().addModel(modelAsset);
+    useStudioStore.getState().selectModel(modelAsset.id);
+    toast.success("Saved as Model!");
+  };
+
+  const handleUseAsRef = (img: GeneratedImage) => {
+    const refAsset = {
+      id: `r-${img.id}`,
+      name: img.prompt || "Generated Reference",
+      thumbnailUrl: img.thumbnailUrl || img.url,
+      originalUrl: img.url,
+      createdAt: img.createdAt,
+    };
+    useAssetStore.getState().addReference(refAsset);
+    useStudioStore.getState().addReference(refAsset);
+    useStudioStore.getState().selectReference(refAsset.id);
+    toast.success("Saved as Reference!");
   };
 
   return (
@@ -253,34 +290,48 @@ export function LeftPanel() {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  {galleryImages.map((img) => {
-                    const imgs = generatedImages;
-                    const isOnCanvas = imgs.some((i) => i.id === img.id);
-                    const isSelected = isOnCanvas && selectedImageIndex !== null && imgs[selectedImageIndex]?.id === img.id;
-                    return (
-                      <div
-                        key={img.id}
-                        className={cn(
-                          "group relative cursor-pointer overflow-hidden rounded-lg border-2 transition-colors",
-                          isSelected
-                            ? "border-primary ring-2 ring-primary/20"
-                            : "border-transparent hover:border-muted-foreground/25"
-                        )}
-                        onClick={() => addToCanvasAndSelect(img)}
-                      >
-                        <img
-                          src={img.thumbnailUrl}
-                          alt=""
-                          className="aspect-[3/4] w-full object-cover"
-                        />
-                        {isSelected && (
-                          <div className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                            <Check className="h-3 w-3" />
-                          </div>
-                        )}
+                  {galleryImages.map((img) => (
+                    <div
+                      key={img.id}
+                      className="group relative overflow-hidden rounded-lg border-2 border-transparent hover:border-muted-foreground/25"
+                    >
+                      <img
+                        src={img.thumbnailUrl}
+                        alt=""
+                        className="aspect-[3/4] w-full object-cover"
+                      />
+                      {/* Hover action buttons */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-7 w-[90%] text-[10px]"
+                          onClick={() => handleUseAsRef(img)}
+                        >
+                          <Palette className="mr-1 h-3 w-3" />
+                          Use as Ref
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-7 w-[90%] text-[10px]"
+                          onClick={() => handleUseAsModel(img)}
+                        >
+                          <UserRound className="mr-1 h-3 w-3" />
+                          Use as Model
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-7 w-[90%] text-[10px]"
+                          onClick={() => addToCanvasAndSelect(img)}
+                        >
+                          <Plus className="mr-1 h-3 w-3" />
+                          Add to Canvas
+                        </Button>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
               {galleryHasMore && (
