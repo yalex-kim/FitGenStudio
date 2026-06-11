@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import OpenAI, { toFile } from 'openai';
+import OpenAI from 'openai';
 
 interface ModelRequestBody {
   gender: string;
