@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import OpenAI, { toFile } from 'openai';
 
 interface VariationRequestBody {
   modelImageBase64: string;
@@ -75,7 +75,7 @@ function validateBody(body: unknown): { valid: true; data: VariationRequestBody 
   return { valid: true, data: body as VariationRequestBody };
 }
 
-const GEMINI_MODEL = 'gemini-3-pro-image-preview';
+const GPT_IMAGE_MODEL = 'gpt-image-2';
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
@@ -127,12 +127,19 @@ const LIGHT_DESC: Record<string, string> = {
   flash: 'On-camera flash editorial look.',
 };
 
+function getSize(framing?: string): '1024x1024' | '1024x1536' {
+  if (framing === 'upper-body' || framing === 'close-up') return '1024x1024';
+  return '1024x1536';
+}
+
 function buildVariationInstruction(data: VariationRequestBody): string {
   const bgDesc = data.background === 'custom' && data.customBackground
     ? data.customBackground
     : BG_DESC[data.background] || '';
 
   const hasReference = !!data.referenceImageBase64;
+  const cameraAngle = data.cameraAngle || 'front';
+  const framing = data.framing || 'full-body';
 
   const lines = [
     hasReference
@@ -146,16 +153,13 @@ function buildVariationInstruction(data: VariationRequestBody): string {
 
   if (hasReference) {
     lines.push(
-      '- Match the reference image\'s overall mood, camera angle, composition, and atmosphere.',
+      "- Match the reference image's overall mood, camera angle, composition, and atmosphere.",
       '- Adapt the background and lighting to resemble the reference.',
       '- The pose should closely follow the reference while keeping the model natural.',
     );
   } else {
     lines.push('- Only change pose, background, and lighting as specified.');
   }
-
-  const cameraAngle = data.cameraAngle || 'front';
-  const framing = data.framing || 'full-body';
 
   lines.push(
     '- Result should look like a real photograph from the same session.',
@@ -172,80 +176,6 @@ function buildVariationInstruction(data: VariationRequestBody): string {
   return lines.join('\n');
 }
 
-function getAspectRatio(framing?: string): string {
-  if (framing === 'upper-body' || framing === 'close-up') return '1:1';
-  return '3:4';
-}
-
-async function callGeminiVariation(
-  instruction: string,
-  modelImg: string,
-  modelMime: string,
-  framing?: string,
-  refImg?: string,
-  refMime?: string,
-) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-
-  const client = new GoogleGenAI({ apiKey });
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1)));
-    }
-
-    try {
-      const inputParts: Array<Record<string, unknown>> = [
-        { text: instruction },
-        { inlineData: { mimeType: modelMime, data: modelImg } },
-      ];
-      if (refImg) {
-        inputParts.push({ inlineData: { mimeType: refMime || 'image/jpeg', data: refImg } });
-      }
-
-      const response = await client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [{
-          role: 'user',
-          parts: inputParts,
-        }],
-        config: {
-          responseModalities: ['TEXT', 'IMAGE'],
-          imageConfig: {
-            aspectRatio: getAspectRatio(framing) as '1:1',
-            imageSize: '1K' as const,
-          },
-        },
-      });
-
-      const responseParts = response.candidates?.[0]?.content?.parts;
-      if (!responseParts) continue;
-
-      for (const part of responseParts) {
-        if (part.inlineData && part.inlineData.data) {
-          return {
-            imageBase64: part.inlineData.data,
-            mimeType: part.inlineData.mimeType || 'image/png',
-            promptUsed: instruction,
-            timestamp: new Date().toISOString(),
-            modelVersion: GEMINI_MODEL,
-          };
-        }
-      }
-
-      continue;
-    } catch (e: any) {
-      if (e?.status === 429 && attempt < MAX_RETRIES - 1) continue;
-      if (e?.status >= 500 && attempt < MAX_RETRIES - 1) continue;
-      throw e;
-    }
-  }
-
-  throw new Error('Max retries exceeded');
-}
-
-// Simple in-memory rate limiting per user/IP
 const TIER_LIMITS: Record<string, number> = { free: 10, pro: 500, business: Infinity };
 const usageCounts = new Map<string, { count: number; month: string }>();
 
@@ -294,33 +224,79 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: validation.error });
   }
 
-  try {
-    const { data } = validation;
-    const instruction = buildVariationInstruction(data);
-    const modelMime = data.modelMimeType || 'image/png';
-
-    const result = await callGeminiVariation(
-      instruction,
-      data.modelImageBase64,
-      modelMime,
-      data.framing,
-      data.referenceImageBase64,
-      data.referenceMimeType,
-    );
-
-    return res.status(200).json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    if (error?.status === 429) {
-      return res.status(429).json({ error: 'Rate limit exceeded. Please try again later.' });
-    }
-    if (error?.status === 400) {
-      return res.status(400).json({ error: error.body?.error?.message || 'Invalid request.' });
-    }
-
-    console.error('Variation generation error:', error);
-    return res.status(500).json({ error: 'Internal server error during variation generation.' });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
   }
+
+  const { data } = validation;
+  const instruction = buildVariationInstruction(data);
+  const size = getSize(data.framing);
+  const client = new OpenAI({ apiKey });
+
+  let lastError = '';
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1)));
+    }
+
+    try {
+      const modelMime = (data.modelMimeType || 'image/png') as 'image/png' | 'image/jpeg' | 'image/webp';
+      const modelExt = modelMime === 'image/jpeg' ? 'jpg' : modelMime === 'image/webp' ? 'webp' : 'png';
+      const modelFile = await toFile(
+        Buffer.from(data.modelImageBase64, 'base64'),
+        `model.${modelExt}`,
+        { type: modelMime },
+      );
+
+      const images: Awaited<ReturnType<typeof toFile>>[] = [modelFile];
+
+      if (data.referenceImageBase64) {
+        const refMime = (data.referenceMimeType || 'image/jpeg') as 'image/png' | 'image/jpeg' | 'image/webp';
+        const refExt = refMime === 'image/jpeg' ? 'jpg' : refMime === 'image/webp' ? 'webp' : 'png';
+        const refFile = await toFile(
+          Buffer.from(data.referenceImageBase64, 'base64'),
+          `reference.${refExt}`,
+          { type: refMime },
+        );
+        images.push(refFile);
+      }
+
+      const response = await client.images.edit({
+        model: GPT_IMAGE_MODEL,
+        image: images.length === 1 ? images[0] : images,
+        prompt: instruction,
+        n: 1,
+        size,
+        quality: 'high',
+        output_format: 'png',
+        input_fidelity: 'high',
+      });
+
+      const imageBase64 = response.data?.[0]?.b64_json;
+      if (!imageBase64) {
+        lastError = `Attempt ${attempt + 1}: no image data in response`;
+        continue;
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          imageBase64,
+          mimeType: 'image/png',
+          promptUsed: instruction,
+          timestamp: new Date().toISOString(),
+          modelVersion: GPT_IMAGE_MODEL,
+        },
+      });
+    } catch (e: any) {
+      lastError = `Attempt ${attempt + 1}: ${e?.message || e}`;
+      if (e?.status === 429 && attempt < MAX_RETRIES - 1) continue;
+      if (e?.status >= 500 && attempt < MAX_RETRIES - 1) continue;
+      throw e;
+    }
+  }
+
+  throw new Error(`Variation failed after ${MAX_RETRIES} attempts. Last: ${lastError}`);
 }

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import OpenAI, { toFile } from 'openai';
 
 interface ModelRequestBody {
   gender: string;
@@ -75,53 +75,13 @@ function validateBody(body: unknown): { valid: true; data: ModelRequestBody } | 
   return { valid: true, data: body as ModelRequestBody };
 }
 
-const GEMINI_MODEL = 'gemini-3-pro-image-preview';
+const GPT_IMAGE_MODEL = 'gpt-image-2';
 
-function getAspectRatio(framing?: string): string {
-  if (framing === 'upper-body' || framing === 'close-up') return '1:1';
-  // full-body, three-quarter-body, or default → portrait
-  return '3:4';
+function getSize(framing?: string): '1024x1024' | '1024x1536' {
+  if (framing === 'upper-body' || framing === 'close-up') return '1024x1024';
+  return '1024x1536';
 }
 
-async function callGemini(prompt: string, framing?: string) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-
-  const client = new GoogleGenAI({ apiKey });
-
-  const response = await client.models.generateContent({
-    model: GEMINI_MODEL,
-    contents: prompt,
-    config: {
-      responseModalities: ['TEXT', 'IMAGE'],
-      imageConfig: {
-        aspectRatio: getAspectRatio(framing) as '1:1',
-        imageSize: '1K' as const,
-      },
-    },
-  });
-
-  const parts = response.candidates?.[0]?.content?.parts;
-  if (!parts) {
-    throw new Error('No response from Gemini');
-  }
-
-  for (const part of parts) {
-    if (part.inlineData && part.inlineData.data) {
-      return {
-        imageBase64: part.inlineData.data,
-        mimeType: part.inlineData.mimeType || 'image/png',
-        promptUsed: prompt,
-        timestamp: new Date().toISOString(),
-        modelVersion: GEMINI_MODEL,
-      };
-    }
-  }
-
-  throw new Error('No image data received from Gemini');
-}
-
-// Simplified prompt builder for serverless context
 function buildPrompt(params: ModelRequestBody): string {
   const genderMap: Record<string, string> = { female: 'a beautiful female fashion model', male: 'a handsome male fashion model' };
   const bodyMap: Record<string, string> = { slim: 'slim, elegant build', athletic: 'athletic, toned build', 'plus-size': 'plus-size, curvy build' };
@@ -132,7 +92,7 @@ function buildPrompt(params: ModelRequestBody): string {
     street: 'Urban casual street fashion look with effortless cool and relaxed confidence.',
   };
   const poseMap: Record<string, string> = {
-    'standing': 'Standing naturally, balanced posture.',
+    standing: 'Standing naturally, balanced posture.',
     'standing-front': 'Standing facing the camera directly, arms relaxed.',
     'standing-three-quarter': 'Standing at a 3/4 angle to the camera.',
     'standing-side': 'Standing in profile view, head slightly toward camera.',
@@ -201,7 +161,6 @@ function buildPrompt(params: ModelRequestBody): string {
   ].join('\n');
 }
 
-// Simple in-memory rate limiting per user/IP (resets on cold start)
 const TIER_LIMITS: Record<string, number> = { free: 10, pro: 500, business: Infinity };
 const usageCounts = new Map<string, { count: number; month: string }>();
 
@@ -235,7 +194,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Rate limit check
   const userId = (req.headers['x-user-id'] as string) || 'anonymous';
   const userTier = (req.headers['x-user-tier'] as string) || 'free';
   const rateCheck = checkRateLimit(userId, userTier);
@@ -251,20 +209,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: validation.error });
   }
 
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
+  }
+
   try {
     const prompt = buildPrompt(validation.data);
-    const result = await callGemini(prompt, validation.data.framing);
+    const size = getSize(validation.data.framing);
+
+    const client = new OpenAI({ apiKey });
+    const response = await client.images.generate({
+      model: GPT_IMAGE_MODEL,
+      prompt,
+      n: 1,
+      size,
+      quality: 'high',
+      output_format: 'png',
+    });
+
+    const imageBase64 = response.data?.[0]?.b64_json;
+    if (!imageBase64) {
+      throw new Error('No image data received from GPT Image 2');
+    }
 
     return res.status(200).json({
       success: true,
-      data: result,
+      data: {
+        imageBase64,
+        mimeType: 'image/png',
+        promptUsed: prompt,
+        timestamp: new Date().toISOString(),
+        modelVersion: GPT_IMAGE_MODEL,
+      },
     });
   } catch (error: any) {
     if (error?.status === 429) {
       return res.status(429).json({ error: 'Rate limit exceeded. Please try again later.' });
     }
     if (error?.status === 400) {
-      return res.status(400).json({ error: error.body?.error?.message || 'Invalid request.' });
+      return res.status(400).json({ error: error.message || 'Invalid request.' });
     }
 
     console.error('Model generation error:', error);

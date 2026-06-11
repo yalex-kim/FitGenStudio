@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import OpenAI, { toFile } from 'openai';
 
 interface GarmentEntry {
   imageBase64: string;
@@ -26,9 +26,8 @@ interface SwapRequestBody {
 
 const VALID_CATEGORIES = ['tops', 'outerwear', 'bottoms', 'dresses', 'accessories'];
 const VALID_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_BASE64_SIZE = 20 * 1024 * 1024 * 1.37; // ~20MB in base64
+const MAX_BASE64_SIZE = 20 * 1024 * 1024 * 1.37;
 
-/** Normalize the request: single garment fields → garments array */
 function normalizeGarments(data: SwapRequestBody): GarmentEntry[] {
   if (data.garments && data.garments.length > 0) return data.garments;
   if (data.garmentImageBase64 && data.garmentCategory) {
@@ -58,7 +57,6 @@ function validateBody(body: unknown): { valid: true; data: SwapRequestBody } | {
     return { valid: false, error: `Invalid modelMimeType. Must be one of: ${VALID_MIME_TYPES.join(', ')}` };
   }
 
-  // Validate multi garment array if present
   if (Array.isArray(b.garments)) {
     for (let i = 0; i < b.garments.length; i++) {
       const g = b.garments[i] as Record<string, unknown>;
@@ -76,7 +74,6 @@ function validateBody(body: unknown): { valid: true; data: SwapRequestBody } | {
       }
     }
   } else {
-    // Fall back to single garment fields
     if (!b.garmentImageBase64 || typeof b.garmentImageBase64 !== 'string') {
       return { valid: false, error: 'garmentImageBase64 or garments array is required.' };
     }
@@ -94,13 +91,13 @@ function validateBody(body: unknown): { valid: true; data: SwapRequestBody } | {
   return { valid: true, data: body as SwapRequestBody };
 }
 
-const GEMINI_MODEL = 'gemini-3-pro-image-preview';
+const GPT_IMAGE_MODEL = 'gpt-image-2';
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
 const CATEGORY_INSTRUCTIONS: Record<string, string> = {
   tops: "Replace the model's top with the garment in the reference. Preserve exact fabric texture, color, pattern, logos, and prints.",
-  outerwear: "Add or replace the outerwear on the model with the reference garment. Preserve all details: fabric, zippers, buttons, pockets, logos.",
+  outerwear: 'Add or replace the outerwear on the model with the reference garment. Preserve all details: fabric, zippers, buttons, pockets, logos.',
   bottoms: "Replace the model's bottoms with the reference garment. Maintain exact fabric, wash, color, and pattern details.",
   dresses: "Replace the model's entire outfit with the dress in the reference. Preserve exact fabric, pattern, color, and construction.",
   accessories: "Add the reference accessory to the model's outfit naturally. Preserve all details, logos, and textures.",
@@ -130,8 +127,7 @@ function buildSwapInstruction(data: SwapRequestBody): string {
     ? `\nStyling instructions: ${fitParts.join(' ')}`
     : '';
 
-  // Build image reference list
-  const imageCount = 1 + garmentEntries.length; // IMAGE 1 = model, IMAGE 2+ = garments
+  const imageCount = 1 + garmentEntries.length;
   const imageListLines = ['- IMAGE 1 (first image): A fashion MODEL wearing some clothing.'];
   const taskLines: string[] = [];
   const categoryInstructionLines: string[] = [];
@@ -177,77 +173,12 @@ function buildSwapInstruction(data: SwapRequestBody): string {
   ].join('\n');
 }
 
-async function callGeminiSwap(
-  instruction: string,
-  modelImg: string,
-  modelMime: string,
-  garmentEntries: Array<{ imageBase64: string; mimeType: string; category: string }>,
-) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-
-  const client = new GoogleGenAI({ apiKey });
-
-  // Build content parts: instruction, model image, then each garment image
-  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
-    { text: instruction },
-    { text: 'IMAGE 1 — The fashion model:' },
-    { inlineData: { mimeType: modelMime, data: modelImg } },
-  ];
-
-  garmentEntries.forEach((g, i) => {
-    const imgNum = i + 2;
-    parts.push({ text: `IMAGE ${imgNum} — The ${g.category} garment to dress the model in:` });
-    parts.push({ inlineData: { mimeType: g.mimeType, data: g.imageBase64 } });
-  });
-
-  const garmentRefs = garmentEntries.map((_, i) => `IMAGE ${i + 2}`).join(', ');
-  parts.push({ text: `Now generate the virtual try-on result: the model from IMAGE 1 wearing the garment(s) from ${garmentRefs}.` });
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1)));
-    }
-
-    try {
-      const response = await client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [{ role: 'user', parts }],
-        config: {
-          responseModalities: ['TEXT', 'IMAGE'],
-          imageConfig: {
-            imageSize: '1K' as const,
-          },
-        },
-      });
-
-      const responseParts = response.candidates?.[0]?.content?.parts;
-      if (!responseParts) continue;
-
-      for (const part of responseParts) {
-        if (part.inlineData && part.inlineData.data) {
-          return {
-            imageBase64: part.inlineData.data,
-            mimeType: part.inlineData.mimeType || 'image/png',
-            promptUsed: instruction,
-            timestamp: new Date().toISOString(),
-            modelVersion: GEMINI_MODEL,
-          };
-        }
-      }
-
-      continue;
-    } catch (e: any) {
-      if (e?.status === 429 && attempt < MAX_RETRIES - 1) continue;
-      if (e?.status >= 500 && attempt < MAX_RETRIES - 1) continue;
-      throw e;
-    }
-  }
-
-  throw new Error('Max retries exceeded');
+async function mimeToExt(mime: string): Promise<string> {
+  if (mime === 'image/jpeg') return 'jpg';
+  if (mime === 'image/webp') return 'webp';
+  return 'png';
 }
 
-// Simple in-memory rate limiting per user/IP
 const TIER_LIMITS: Record<string, number> = { free: 10, pro: 500, business: Infinity };
 const usageCounts = new Map<string, { count: number; month: string }>();
 
@@ -296,40 +227,81 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: validation.error });
   }
 
-  try {
-    const { data } = validation;
-    const garmentEntries = normalizeGarments(data);
-    if (garmentEntries.length === 0) {
-      return res.status(400).json({ error: 'At least one garment is required.' });
-    }
-
-    const instruction = buildSwapInstruction(data);
-    const modelMime = data.modelMimeType || 'image/png';
-
-    const result = await callGeminiSwap(
-      instruction,
-      data.modelImageBase64,
-      modelMime,
-      garmentEntries.map((g) => ({
-        imageBase64: g.imageBase64,
-        mimeType: g.mimeType || 'image/png',
-        category: g.category,
-      })),
-    );
-
-    return res.status(200).json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    if (error?.status === 429) {
-      return res.status(429).json({ error: 'Rate limit exceeded. Please try again later.' });
-    }
-    if (error?.status === 400) {
-      return res.status(400).json({ error: error.body?.error?.message || 'Invalid request.' });
-    }
-
-    console.error('Clothing swap error:', error);
-    return res.status(500).json({ error: 'Internal server error during clothing swap.' });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
   }
+
+  const { data } = validation;
+  const garmentEntries = normalizeGarments(data);
+  if (garmentEntries.length === 0) {
+    return res.status(400).json({ error: 'At least one garment is required.' });
+  }
+
+  const instruction = buildSwapInstruction(data);
+  const client = new OpenAI({ apiKey });
+
+  let lastError = '';
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1)));
+    }
+
+    try {
+      const modelMime = (data.modelMimeType || 'image/png') as 'image/png' | 'image/jpeg' | 'image/webp';
+      const modelExt = await mimeToExt(modelMime);
+      const modelFile = await toFile(
+        Buffer.from(data.modelImageBase64, 'base64'),
+        `model.${modelExt}`,
+        { type: modelMime },
+      );
+
+      const garmentFiles = await Promise.all(
+        garmentEntries.map(async (g) => {
+          const mime = (g.mimeType || 'image/png') as 'image/png' | 'image/jpeg' | 'image/webp';
+          const ext = await mimeToExt(mime);
+          return toFile(Buffer.from(g.imageBase64, 'base64'), `garment_${g.category}.${ext}`, { type: mime });
+        }),
+      );
+
+      // First image is model, rest are garments — gpt-image-2 supports up to 16 images
+      const images = [modelFile, ...garmentFiles];
+
+      const response = await client.images.edit({
+        model: GPT_IMAGE_MODEL,
+        image: images,
+        prompt: instruction,
+        n: 1,
+        size: '1024x1536',
+        quality: 'high',
+        output_format: 'png',
+        input_fidelity: 'high',
+      });
+
+      const imageBase64 = response.data?.[0]?.b64_json;
+      if (!imageBase64) {
+        lastError = `Attempt ${attempt + 1}: no image data in response`;
+        continue;
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          imageBase64,
+          mimeType: 'image/png',
+          promptUsed: instruction,
+          timestamp: new Date().toISOString(),
+          modelVersion: GPT_IMAGE_MODEL,
+        },
+      });
+    } catch (e: any) {
+      lastError = `Attempt ${attempt + 1}: ${e?.message || e}`;
+      if (e?.status === 429 && attempt < MAX_RETRIES - 1) continue;
+      if (e?.status >= 500 && attempt < MAX_RETRIES - 1) continue;
+      throw e;
+    }
+  }
+
+  throw new Error(`Swap failed after ${MAX_RETRIES} attempts. Last: ${lastError}`);
 }

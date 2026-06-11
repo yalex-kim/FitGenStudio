@@ -25,7 +25,7 @@ describe('API Route: /api/generate/model', () => {
   let handler: any;
 
   beforeEach(async () => {
-    vi.stubEnv('GEMINI_API_KEY', 'test-key');
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
     const mod = await import('../../api/generate/model');
     handler = mod.default;
   });
@@ -109,7 +109,7 @@ describe('API Route: /api/generate/swap', () => {
   let handler: any;
 
   beforeEach(async () => {
-    vi.stubEnv('GEMINI_API_KEY', 'test-key');
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
     const mod = await import('../../api/generate/swap');
     handler = mod.default;
   });
@@ -187,7 +187,7 @@ describe('API Route: /api/generate/variation', () => {
   let handler: any;
 
   beforeEach(async () => {
-    vi.stubEnv('GEMINI_API_KEY', 'test-key');
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
     const mod = await import('../../api/generate/variation');
     handler = mod.default;
   });
@@ -239,7 +239,7 @@ describe('API Route: /api/upscale', () => {
   let handler: any;
 
   beforeEach(async () => {
-    vi.stubEnv('GEMINI_API_KEY', 'test-key');
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
     const mod = await import('../../api/upscale');
     handler = mod.default;
   });

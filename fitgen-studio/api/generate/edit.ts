@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import OpenAI, { toFile } from 'openai';
 
 interface EditRequestBody {
   imageBase64: string;
@@ -11,8 +11,8 @@ interface EditRequestBody {
 const VALID_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_BASE64_SIZE = 20 * 1024 * 1024 * 1.37;
 
-const GEMINI_MODEL = 'gemini-3-pro-image-preview';
-const MAX_RETRIES = 5;
+const GPT_IMAGE_MODEL = 'gpt-image-2';
+const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 500;
 
 function validateBody(body: unknown): { valid: true; data: EditRequestBody } | { valid: false; error: string } {
@@ -84,82 +84,6 @@ function buildEditPrompt(data: EditRequestBody): string {
   return lines.join('\n');
 }
 
-async function callGeminiEdit(imageBase64: string, mimeType: string, prompt: string) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-
-  const client = new GoogleGenAI({ apiKey });
-  let lastBlockReason = '';
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1)));
-    }
-
-    try {
-      // Bump temperature on retries to escape repeated MALFORMED_FUNCTION_CALL
-      const temperature = attempt === 0 ? 1.0 : 1.0 + attempt * 0.1;
-
-      const response = await client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [{
-          role: 'user',
-          parts: [
-            { inlineData: { mimeType, data: imageBase64 } },
-            { text: attempt > 0 ? prompt + '\n\nGenerate the edited image.' : prompt },
-          ],
-        }],
-        config: {
-          responseModalities: ['IMAGE'],
-          temperature,
-          imageConfig: {
-            imageSize: '1K' as const,
-          },
-        },
-      });
-
-      // Check for safety blocks or empty response
-      const candidate = response.candidates?.[0];
-      if (!candidate?.content?.parts) {
-        const reason = candidate?.finishReason || 'no parts';
-        lastBlockReason = `Attempt ${attempt + 1}: empty response (${reason})`;
-        console.error(lastBlockReason, JSON.stringify({
-          finishReason: candidate?.finishReason,
-          safetyRatings: candidate?.safetyRatings,
-          promptFeedback: (response as any).promptFeedback,
-        }));
-        continue;
-      }
-
-      for (const part of candidate.content.parts) {
-        if (part.inlineData && part.inlineData.data) {
-          return {
-            imageBase64: part.inlineData.data,
-            mimeType: part.inlineData.mimeType || 'image/png',
-            timestamp: new Date().toISOString(),
-            modelVersion: GEMINI_MODEL,
-          };
-        }
-      }
-
-      // Got parts but no image data — log what we received
-      const partTypes = candidate.content.parts.map(p =>
-        p.inlineData ? 'image' : p.text ? `text(${p.text.slice(0, 80)})` : 'unknown'
-      );
-      lastBlockReason = `Attempt ${attempt + 1}: response had parts [${partTypes.join(', ')}] but no image data`;
-      console.error(lastBlockReason);
-      continue;
-    } catch (e: any) {
-      lastBlockReason = `Attempt ${attempt + 1}: ${e?.message || e}`;
-      if (e?.status === 429 && attempt < MAX_RETRIES - 1) continue;
-      if (e?.status >= 500 && attempt < MAX_RETRIES - 1) continue;
-      throw e;
-    }
-  }
-
-  throw new Error(`Edit failed after ${MAX_RETRIES} attempts. Last: ${lastBlockReason}`);
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -170,27 +94,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: validation.error });
   }
 
-  try {
-    const { data } = validation;
-    const mimeType = data.imageMimeType || 'image/png';
-    const prompt = buildEditPrompt(data);
-
-    const result = await callGeminiEdit(data.imageBase64, mimeType, prompt);
-
-    return res.status(200).json({
-      success: true,
-      data: result,
-    });
-  } catch (error: any) {
-    if (error?.status === 429) {
-      return res.status(429).json({ error: 'Rate limit exceeded. Please try again later.' });
-    }
-    if (error?.status === 400) {
-      return res.status(400).json({ error: error.body?.error?.message || 'Invalid request.' });
-    }
-
-    const msg = error?.message || String(error);
-    console.error('Image edit error:', msg, error);
-    return res.status(500).json({ error: msg });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
   }
+
+  const { data } = validation;
+  const mimeType = (data.imageMimeType || 'image/png') as 'image/png' | 'image/jpeg' | 'image/webp';
+  const prompt = buildEditPrompt(data);
+  const client = new OpenAI({ apiKey });
+
+  let lastError = '';
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, INITIAL_BACKOFF_MS * Math.pow(2, attempt - 1)));
+    }
+
+    try {
+      const ext = mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/webp' ? 'webp' : 'png';
+      const imageBuffer = Buffer.from(data.imageBase64, 'base64');
+      const imageFile = await toFile(imageBuffer, `image.${ext}`, { type: mimeType });
+
+      const response = await client.images.edit({
+        model: GPT_IMAGE_MODEL,
+        image: imageFile,
+        prompt,
+        n: 1,
+        size: '1024x1024',
+        quality: 'high',
+        output_format: 'png',
+        input_fidelity: 'high',
+      });
+
+      const imageBase64 = response.data?.[0]?.b64_json;
+      if (!imageBase64) {
+        lastError = `Attempt ${attempt + 1}: no image data in response`;
+        continue;
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          imageBase64,
+          mimeType: 'image/png',
+          timestamp: new Date().toISOString(),
+          modelVersion: GPT_IMAGE_MODEL,
+        },
+      });
+    } catch (e: any) {
+      lastError = `Attempt ${attempt + 1}: ${e?.message || e}`;
+      if (e?.status === 429 && attempt < MAX_RETRIES - 1) continue;
+      if (e?.status >= 500 && attempt < MAX_RETRIES - 1) continue;
+      throw e;
+    }
+  }
+
+  throw new Error(`Edit failed after ${MAX_RETRIES} attempts. Last: ${lastError}`);
 }
